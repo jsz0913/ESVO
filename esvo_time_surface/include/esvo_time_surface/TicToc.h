@@ -8,6 +8,7 @@
 #include <chrono>
 
 namespace esvo_time_surface
+//使用命名空间
 {
 class TicToc
 {
@@ -31,6 +32,9 @@ class TicToc
 
   private:
   std::chrono::time_point<std::chrono::system_clock> start, end;
+  //chrono库：https://www.cnblogs.com/zlshmily/p/10058427.html
+  //tic初始化start 用的system_clock
+  //做差结果保存到duration<double> 
 };
 }
 
