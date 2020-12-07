@@ -111,8 +111,7 @@ public:
 };
 
   
-// TimeSurface类
-// 变量：
+
 class TimeSurface
 {
   struct Job
