@@ -128,6 +128,9 @@ class TimeSurface
 
 public:
   TimeSurface(ros::NodeHandle & nh, ros::NodeHandle nh_private);
+  //  ros::NodeHandle nh;
+  //  ros::NodeHandle nh_private("~");
+  //  esvo_time_surface::TimeSurface ts(nh, nh_private);
   virtual ~TimeSurface();
 
 private:
@@ -140,6 +143,8 @@ private:
 
   // callbacks
   void syncCallback(const std_msgs::TimeConstPtr& msg);
+  //Header header，uint32 height，uint32 width ，Event[] events
+
   void eventsCallback(const dvs_msgs::EventArray::ConstPtr& msg);
   void cameraInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& msg);
 
