@@ -1,9 +1,11 @@
 #ifndef esvo_time_surface_H_
 #define esvo_time_surface_H_
 
+//ROS
 #include <ros/ros.h>
 #include <std_msgs/Time.h>
 #include <cv_bridge/cv_bridge.h>
+//cv_bridge用于ROS图像和OpenCV图像的转换
 #include <sensor_msgs/Image.h>
 #include <sensor_msgs/CameraInfo.h>
 #include <sensor_msgs/image_encodings.h>
@@ -12,7 +14,7 @@
 
 #include <opencv2/core/core.hpp>
 #include <opencv2/imgproc/imgproc.hpp>
-
+//rpg msgs，引入message使用头文件
 #include <dvs_msgs/Event.h>
 #include <dvs_msgs/EventArray.h>
 
@@ -24,7 +26,19 @@ namespace esvo_time_surface
 {
 #define NUM_THREAD_TS 1
 using EventQueue = std::deque<dvs_msgs::Event>;
-
+// uint16 x，uint16 y，time ts，bool polarity；
+// using = typedef
+  
+  
+// EventQueueMat 类
+// 变量：size_t width_，size_t height_，图大小 size_t queueLen_，
+// std::vector<EventQueue> eqMat_    存储事件队列
+// size_t的取值range是目标平台下最大可能的数组尺寸，方便移植
+// 函数：
+// insideImage，判断size_t x, size_t y 是否在图像范围内
+// getEventQueue，注意按x方向存储
+// insertEvent，注意队列最大长度queueLen_，超过pop_front
+// getMostRecentEventBeforeT  用的ROS::time，T时间前最近的事件，赋给指针
 class EventQueueMat 
 {
 public:
@@ -44,11 +58,12 @@ public:
     {
       EventQueue& eq = getEventQueue(e.x, e.y);
       eq.push_back(e);
+      //用的while
       while(eq.size() > queueLen_)
         eq.pop_front();
     }
   }
-
+  // 使用ROS::time
   bool getMostRecentEventBeforeT(
     const size_t x,
     const size_t y,
@@ -61,7 +76,7 @@ public:
     EventQueue& eq = getEventQueue(x, y);
     if(eq.empty())
       return false;
-
+  //从队列尾开始遍历，也就是说插入事件不是根据时间
     for(auto it = eq.rbegin(); it != eq.rend(); ++it)
     {
       const dvs_msgs::Event& e = *it;
@@ -83,7 +98,7 @@ public:
   {
     return !(x < 0 || x >= width_ || y < 0 || y >= height_);
   }
-
+  //声明为inline
   inline EventQueue& getEventQueue(const size_t x, const size_t y)
   {
     return eqMat_[x + width_ * y];
@@ -95,6 +110,9 @@ public:
   std::vector<EventQueue> eqMat_;
 };
 
+  
+// TimeSurface类
+// 变量：
 class TimeSurface
 {
   struct Job
