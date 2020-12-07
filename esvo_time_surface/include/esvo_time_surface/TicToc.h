@@ -1,6 +1,6 @@
 #ifndef esvo_tictoc_H_
 #define esvo_tictoc_H_
-
+//防止重复包含
 #pragma once
 
 #include <ctime>
