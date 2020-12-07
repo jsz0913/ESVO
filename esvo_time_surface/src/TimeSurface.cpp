@@ -18,14 +18,19 @@ TimeSurface::TimeSurface(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   sync_topic_ = nh_.subscribe("sync", 1, &TimeSurface::syncCallback, this);
   image_transport::ImageTransport it_(nh_);
   time_surface_pub_ = it_.advertise("time_surface", 1);
-
+  // 订阅和发布的写法，用的是nodehandle的引用
+    
+    
   // parameters
   nh_private.param<bool>("use_sim_time", bUse_Sim_Time_, true);
   nh_private.param<bool>("ignore_polarity", ignore_polarity_, true);
   nh_private.param<double>("decay_ms", decay_ms_, 30);
   int TS_mode;
+    
+  //写法和枚举用法
   nh_private.param<int>("time_surface_mode", TS_mode, 0);
   time_surface_mode_ = (TimeSurfaceMode)TS_mode;
+    
   nh_private.param<int>("median_blur_kernel_size", median_blur_kernel_size_, 1);
   nh_private.param<int>("max_event_queue_len", max_event_queue_length_, 20);
   //
@@ -33,9 +38,11 @@ TimeSurface::TimeSurface(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   bSensorInitialized_ = false;
   if(pEventQueueMat_)
     pEventQueueMat_->clear();
+   //指向EventQueueMat的智能指针
   sensor_size_ = cv::Size(0,0);
 }
 
+//只
 TimeSurface::~TimeSurface()
 {
   time_surface_pub_.shutdown();
@@ -75,6 +82,7 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
           const double dt = (external_sync_time - most_recent_stamp_at_coordXY).toSec();
           double polarity = (most_recent_event_at_coordXY_before_T.polarity) ? 1.0 : -1.0;
           double expVal = std::exp(-dt / decay_sec);
+          //对应转换
           if(!ignore_polarity_)
             expVal *= polarity;
 
