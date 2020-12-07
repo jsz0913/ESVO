@@ -81,6 +81,7 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
         {
           const double dt = (external_sync_time - most_recent_stamp_at_coordXY).toSec();
           double polarity = (most_recent_event_at_coordXY_before_T.polarity) ? 1.0 : -1.0;
+          //bool to double
           double expVal = std::exp(-dt / decay_sec);
           //对应转换
           if(!ignore_polarity_)
@@ -94,6 +95,7 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
           if(time_surface_mode_ == FORWARD && bCamInfoAvailable_)
           {
             Eigen::Matrix<double, 2, 1> uv_rect = precomputed_rectified_points_.block<2, 1>(0, y * sensor_size_.width + x);
+            //2*x 的 precomputed_rectified_points取出对应点
             size_t u_i, v_i;
             if(uv_rect(0) >= 0 && uv_rect(1) >= 0)
             {
