@@ -12,10 +12,12 @@ namespace esvo_time_surface
 TimeSurface::TimeSurface(ros::NodeHandle & nh, ros::NodeHandle nh_private)
   : nh_(nh)
 {
-  // setup subscribers and publishers
+  // setup subscribers and publishers，使用成员函数作为subscribe的回调函数，用this
   event_sub_ = nh_.subscribe("events", 0, &TimeSurface::eventsCallback, this);
   camera_info_sub_ = nh_.subscribe("camera_info", 1, &TimeSurface::cameraInfoCallback, this);
   sync_topic_ = nh_.subscribe("sync", 1, &TimeSurface::syncCallback, this);
+    
+  // image_transport 类似oublisher的写法
   image_transport::ImageTransport it_(nh_);
   time_surface_pub_ = it_.advertise("time_surface", 1);
 
@@ -124,6 +126,8 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
     time_surface_map = 255.0 * (time_surface_map + 1.0) / 2.0;
   else
     time_surface_map = 255.0 * time_surface_map;
+  
+  // 0-1的数 映射到 0-255 转换成8u 小数位去掉了？
   time_surface_map.convertTo(time_surface_map, CV_8U);
 
   // median blur
@@ -133,11 +137,13 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
   // Publish event image
   static cv_bridge::CvImage cv_image;
   cv_image.encoding = "mono8";
+  //mono8: CV_8UC1, grayscale image 
   cv_image.image = time_surface_map.clone();
 
   if(time_surface_mode_ == FORWARD && time_surface_pub_.getNumSubscribers() > 0)
   {
     cv_image.header.stamp = external_sync_time;
+    //external_sync_time 存入的是生成时的ros时间
     time_surface_pub_.publish(cv_image.toImageMsg());
   }
 
@@ -146,6 +152,7 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
     cv_bridge::CvImage cv_image2;
     cv_image2.encoding = cv_image.encoding;
     cv_image2.header.stamp = external_sync_time;
+    //简单重映射，INTER_LINEAR – 双线性插值
     cv::remap(cv_image.image, cv_image2.image, undistort_map1_, undistort_map2_, CV_INTER_LINEAR);
     time_surface_pub_.publish(cv_image2.toImageMsg());
   }
