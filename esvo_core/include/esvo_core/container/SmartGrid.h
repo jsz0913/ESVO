@@ -1,6 +1,7 @@
 #ifndef ESVO_CORE_CONTAINER_SMARTGRID_H
 #define ESVO_CORE_CONTAINER_SMARTGRID_H
 
+//字符串转换、伪随机序列生成、动态内存管理
 #include <cstdlib>
 #include <memory>
 #include <list>
@@ -11,12 +12,14 @@ namespace esvo_core
 {
 namespace container
 {
+// 模板h和cpp合为一
 template<class T>
 class SmartGrid
 {
   public:
   typedef std::shared_ptr<SmartGrid> Ptr;
   typedef std::list<T> gridElements;
+  //模板类型用typename说明是类型而不是静态变量
   typedef typename gridElements::iterator iterator;
 
   SmartGrid();
@@ -50,25 +53,31 @@ class SmartGrid
   void getNeighbourhood(size_t row, size_t col, size_t radius, std::vector<T *> &neighbours);
 
   private:
+  //_grid是个向量，里面存了好多向量的指针，每个向量里存的T的指针
   std::vector<std::vector<T *> *> _grid;
+  // 存储T的列表
   gridElements _elements;
   T _invalid; //invalid element that we can return when the element doesn't exist
 };
-
+  
+// 两种构造时，默认的用default
 template<class T>
 SmartGrid<T>::SmartGrid() = default;
 
 template<class T>
 SmartGrid<T>::SmartGrid(size_t rows, size_t cols)
 {
+  //大的都有reserve 避免内存空间问题
   _grid.reserve(rows);
   for (size_t r = 0; r < rows; r++)
   {
     _grid.push_back(new std::vector<T *>());
+    //最新的一个向量指针取出resize cols个 空指针
     (*_grid.back()).resize(cols, NULL);
   }
 }
 
+//delete存储的每个向量
 template<class T>
 SmartGrid<T>::~SmartGrid()
 {
