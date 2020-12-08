@@ -1,5 +1,6 @@
 #include <esvo_core/tools/sobel.h>
-
+//Sobel边缘检测
+//https://www.cnblogs.com/yibeimingyue/p/10878514.html
 namespace esvo_core
 {
 namespace tools
@@ -23,8 +24,11 @@ double Sobel::grad_y(Eigen::Matrix3d& src)
 void Sobel::grad_xy(Eigen::Matrix3d& src, Eigen::Vector2d& grad)
 {
   grad << grad_x(src), grad_y(src);
+  // 两个convolve /8
 }
 
+//P.cwiseProduct(Q);    R = P .* Q 对应点相乘 
+// 求和得到卷积值
 double Sobel::convolve(
   const Eigen::Matrix3d& kernel,
   const Eigen::Matrix3d& src)
