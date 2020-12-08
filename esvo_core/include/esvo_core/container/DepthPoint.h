@@ -44,7 +44,7 @@ class DepthPoint
 
   size_t &age();
   const size_t &age() const;
-
+  //限制variance下限
   void boundVariance();
 
   void update(double invDepth, double variance);// Gaussian distribution
