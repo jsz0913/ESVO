@@ -12,6 +12,7 @@ namespace container
 class DepthPoint
 {
   public:
+  //类中有Eigen成员，需要写宏定义
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
   typedef std::shared_ptr<DepthPoint> Ptr;
 
