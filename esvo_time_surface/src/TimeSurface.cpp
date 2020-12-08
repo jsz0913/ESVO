@@ -136,11 +136,11 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
     time_surface_map = 255.0 * time_surface_map;
   time_surface_map.convertTo(time_surface_map, CV_8U);
 
-  // median blur
+  // median blur，中值滤波
   if(median_blur_kernel_size_ > 0)
     cv::medianBlur(time_surface_map, time_surface_map, 2 * median_blur_kernel_size_ + 1);
 
-  // Publish event image
+  // Publish event image，mono8 8UC1，成员函数内新建静态变量的原因：各类对象共享？？看看后面需要几个实例
   static cv_bridge::CvImage cv_image;
   cv_image.encoding = "mono8";
   cv_image.image = time_surface_map.clone();
@@ -148,6 +148,7 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
   if(time_surface_mode_ == FORWARD && time_surface_pub_.getNumSubscribers() > 0)
   {
     cv_image.header.stamp = external_sync_time;
+    //这里时间不是发布时间，而是生成时间
     time_surface_pub_.publish(cv_image.toImageMsg());
   }
 
@@ -156,6 +157,7 @@ void TimeSurface::createTimeSurfaceAtTime(const ros::Time& external_sync_time)
     cv_bridge::CvImage cv_image2;
     cv_image2.encoding = cv_image.encoding;
     cv_image2.header.stamp = external_sync_time;
+    //cv remap 简单映射 CV_INTER_LINEAR 双线性插值
     cv::remap(cv_image.image, cv_image2.image, undistort_map1_, undistort_map2_, CV_INTER_LINEAR);
     time_surface_pub_.publish(cv_image2.toImageMsg());
   }
@@ -173,7 +175,15 @@ void TimeSurface::createTimeSurfaceAtTime_hyperthread(const ros::Time& external_
   cv::Mat time_surface_map;
   time_surface_map = cv::Mat::zeros(sensor_size_, CV_64F);
 
+  // distribute jobs 和 hyper thread processing 新加部分
   // distribute jobs
+  // Job:EIGEN_MAKE_ALIGNED_OPERATOR_NEW,EventQueueMat* pEventQueueMat_,cv::Mat* pTimeSurface_
+  // size_t start_col_, end_col_;
+  // size_t start_row_, end_row_;
+  // size_t i_thread_;
+  // ros::Time external_sync_time_;
+  // double decay_sec_;
+  // 将任务分块，多个线程同时做，除了最后一个余项凑到一起，其他都被线程数平分
   std::vector<Job> jobs(NUM_THREAD_TS);
   size_t num_col_per_thread = sensor_size_.width / NUM_THREAD_TS;
   size_t res_col = sensor_size_.width % NUM_THREAD_TS;
@@ -196,7 +206,12 @@ void TimeSurface::createTimeSurfaceAtTime_hyperthread(const ros::Time& external_
   // hyper thread processing
   std::vector<std::thread> threads;
   threads.reserve(NUM_THREAD_TS);
+  // reserve预留，但不生成
+  // emplace_back() 和 push_back() 的区别，就在于底层实现的机制不同
+  // push_back() 向容器尾部添加元素时，首先会创建这个元素，然后再将这个元素拷贝或者移动到容器中（如果是拷贝的话，事后会自行销毁先前创建的这个元素）
+  // emplace_back() 在实现时，则是直接在容器尾部创建这个元素，省去了拷贝或移动元素的过程。
   for(size_t i = 0; i < NUM_THREAD_TS; i++)
+    //this表示的是类本对象的指针，bind把thread函数改变，为的是创建线程入口函数问题，将函数指针、类对象、参数传入，得到一无参函数用于线程调用
     threads.emplace_back(std::bind(&TimeSurface::thread, this, jobs[i]));
   for(auto& thread:threads)
     if(thread.joinable())
@@ -236,6 +251,8 @@ void TimeSurface::createTimeSurfaceAtTime_hyperthread(const ros::Time& external_
 
 void TimeSurface::thread(Job &job)
 {
+  //把非多线程的那块变为线程，拆成job
+  //预存变量
   EventQueueMat & eqMat = *job.pEventQueueMat_;
   cv::Mat& time_surface_map = *job.pTimeSurface_;
   size_t start_col = job.start_col_;
@@ -311,6 +328,7 @@ void TimeSurface::syncCallback(const std_msgs::TimeConstPtr& msg)
     TicToc tt;
     tt.tic();
 #endif
+    // 所以msg->data 和 ros::Time::now() 类型相同
     if(NUM_THREAD_TS == 1)
       createTimeSurfaceAtTime(sync_time_);
     if(NUM_THREAD_TS > 1)
@@ -324,7 +342,7 @@ void TimeSurface::cameraInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& ms
 {
   if(bCamInfoAvailable_)
     return;
-
+  //http://docs.ros.org/en/kinetic/api/sensor_msgs/html/msg/CameraInfo.html
   cv::Size sensor_size(msg->width, msg->height);
   camera_matrix_ = cv::Mat(3, 3, CV_64F);
   for (int i = 0; i < 3; i++)
@@ -335,7 +353,7 @@ void TimeSurface::cameraInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& ms
   dist_coeffs_ = cv::Mat(msg->D.size(), 1, CV_64F);
   for (int i = 0; i < msg->D.size(); i++)
     dist_coeffs_.at<double>(i) = msg->D[i];
-
+  // (i,j) 和 point(i,j) 一个是行列，一个是坐标。Mat::at(Point(x, y)) == Mat::at(y,x) 左上角，横x竖y
   rectification_matrix_ = cv::Mat(3, 3, CV_64F);
   for (int i = 0; i < 3; i++)
     for (int j = 0; j < 3; j++)
@@ -345,7 +363,10 @@ void TimeSurface::cameraInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& ms
   for (int i = 0; i < 4; i++)
     for (int j = 0; j < 3; j++)
       projection_matrix_.at<double>(cv::Point(i, j)) = msg->P[i+j*4];
-
+  
+  //https://blog.csdn.net/u013341645/article/details/78710740
+  //http://wiki.ros.org/camera_calibration/Tutorials/StereoCalibration
+  //http://wiki.ros.org/camera_calibration/Tutorials/MonocularCalibration
   if(distortion_model_ == "equidistant")
   {
     cv::fisheye::initUndistortRectifyMap(camera_matrix_, dist_coeffs_,
@@ -373,6 +394,8 @@ void TimeSurface::cameraInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& ms
   precomputed_rectified_points_ = Eigen::Matrix2Xd(2, sensor_size.height * sensor_size.width);
   // raw coordinates
   cv::Mat_<cv::Point2f> RawCoordinates(1, sensor_size.height * sensor_size.width);
+  
+  //先存的x，得出原始坐标
   for (int y = 0; y < sensor_size.height; y++)
   {
     for (int x = 0; x < sensor_size.width; x++)
@@ -412,14 +435,17 @@ void TimeSurface::cameraInfoCallback(const sensor_msgs::CameraInfo::ConstPtr& ms
 
 void TimeSurface::eventsCallback(const dvs_msgs::EventArray::ConstPtr& msg)
 {
+  
   std::lock_guard<std::mutex> lock(data_mutex_);
-
+  // 使用event种的数据，创建eventqeumat
   if(!bSensorInitialized_)
     init(msg->width, msg->height);
 
   for(const dvs_msgs::Event& e : msg->events)
   {
     events_.push_back(e);
+    //新来的加入到队列中，同时查看目前队列
+    //对events队列进行排序，大于新插入的时间戳的事件后移，直到不满足后插入 
     int i = events_.size() - 2;
     while(i >= 0 && events_[i].ts > e.ts)
     {
@@ -427,10 +453,11 @@ void TimeSurface::eventsCallback(const dvs_msgs::EventArray::ConstPtr& msg)
       i--;
     }
     events_[i+1] = e;
-
+    //插入队列中时间戳最大的元素
     const dvs_msgs::Event& last_event = events_.back();
     pEventQueueMat_->insertEvent(last_event);
-  }
+  }//最终插入与msg中事件相同个事件，但是整个队列中时间戳最大的哪些
+
   clearEventQueue();
 }
 
