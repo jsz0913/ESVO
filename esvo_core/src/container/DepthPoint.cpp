@@ -133,7 +133,7 @@ DepthPoint::age() const
 {
   return age_;
 }
-
+// const 因为不能随便对赋值，引用 因为避免多一次赋值
 void
 DepthPoint::boundVariance()
 {
@@ -163,6 +163,7 @@ DepthPoint::update(
   boundVariance();
 }
 
+//T分布更新：论文中u s v 对应 nu_ invDepth scaleSquared
 void
 DepthPoint::update_studentT(double invDepth, double scale2, double variance, double nu)
 {
