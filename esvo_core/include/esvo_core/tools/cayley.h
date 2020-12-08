@@ -1,6 +1,8 @@
 #ifndef ESVO_CORE_TOOLS_CAYLEY_H
 #define ESVO_CORE_TOOLS_CAYLEY_H
 
+//嵌套命名空间，提供一个矩阵和向量的转换
+
 #include <Eigen/Eigen>
 namespace esvo_core
 {
