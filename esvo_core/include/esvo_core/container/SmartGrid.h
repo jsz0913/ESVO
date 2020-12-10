@@ -13,6 +13,7 @@ namespace esvo_core
 namespace container
 {
 // 模板h和cpp合为一
+// T是一种能const cast的类
 template<class T>
 class SmartGrid
 {
@@ -67,17 +68,17 @@ SmartGrid<T>::SmartGrid() = default;
 template<class T>
 SmartGrid<T>::SmartGrid(size_t rows, size_t cols)
 {
-  //大的都有reserve 避免内存空间问题
+  //向量元素多时用reserve 避免内存空间问题
   _grid.reserve(rows);
   for (size_t r = 0; r < rows; r++)
   {
     _grid.push_back(new std::vector<T *>());
-    //最新的一个向量指针取出resize cols个 空指针
+    //刚加入的向量指针取出，resize cols个空指针
     (*_grid.back()).resize(cols, NULL);
   }
 }
 
-//delete存储的每个向量
+//delete元素中每个向量指针指向的内存空间，即elements
 template<class T>
 SmartGrid<T>::~SmartGrid()
 {
@@ -96,7 +97,8 @@ SmartGrid<T>::operator=(const SmartGrid &rhs)
   for (size_t r = 0; r < rows(); r++)
     delete _grid[r];
   _grid.clear();
-
+  //delete释放的指针指向的向量，而不是存储删除指针本身。vector.clear()后size变为0，但容量不变
+  
   //initialize a new NULL grid with correct size
   for (size_t r = 0; r < rhs.rows(); r++)
   {
@@ -108,6 +110,7 @@ SmartGrid<T>::operator=(const SmartGrid &rhs)
   typename gridElements::iterator it = _elements.begin();
   while (it != _elements.end())
   {
+
     (*_grid[it->row()])[it->col()] = &const_cast<T &>(*it);
     it++;
   }
@@ -120,6 +123,8 @@ void
 SmartGrid<T>::resize(size_t rows, size_t cols)
 {
   this->reset();
+  //列表_element清空，网格全置为空指针
+  //如果reserve的rows比之前大，相当于在之前基础上继续扩展rows？？
   _grid.reserve(rows);
   for (size_t r = 0; r < rows; r++)
   {
@@ -128,17 +133,21 @@ SmartGrid<T>::resize(size_t rows, size_t cols)
   }
 }
 
+
 template<class T>
 void
 SmartGrid<T>::erode(size_t radius, size_t border, double ratio)
 {
+  //剔除周围不存在点太多的点
   // have to save a temporary copy of the depth map
   SmartGrid gridTmp(rows(), cols());
-
   // first transfer all the existing elements
   typename gridElements::iterator it = _elements.begin();
   while (it != _elements.end())
   {
+    // set：如果空指针，先建立新的_elements元素，指向它，直接拷贝（同时修改了_elemnents）
+    //（因为有时候存在直接覆盖的情况）
+    //_elements中存储实例，smartgrid根据实例中的行列值，存储指向_elements实例的指针
     gridTmp.set(it->row(), it->col(), *it);
     it++;
   }
@@ -150,14 +159,16 @@ SmartGrid<T>::erode(size_t radius, size_t border, double ratio)
   //erode if not enough neightbours exist(within radius)
   it = gridTmp._elements.begin();
   auto it2 = _elements.begin();
+  //再对临时smartgrid的_elements列表遍历
   while (it != gridTmp._elements.end())
   {
     empty_pixel_count = 0;
+    //针对_elements中的每个元素，检查其坐标周围是否存在足够多的_elements的元素
     for (int r = it->row() - radius; r < it->row() + radius + 1; r++)
     {
       for (int c = it->col() - radius; c < it->col() + radius + 1; c++)
       {
-        //check whether this location is inside the image
+        //check whether this location is inside the image，那为什么还要个border
         if (r >= border && r < (int) rows() - border && c >= border && c < (int) cols() - border)
         {
           //check whether that element is missing
@@ -173,7 +184,7 @@ SmartGrid<T>::erode(size_t radius, size_t border, double ratio)
       }
     }
 
-    // erosion critera
+    // erosion critera，没事的话继续下一个
     if(empty_pixel_count >= (size_t)(num_overall_pixel * ratio))
     {
       typename gridElements::iterator temp = it2;
@@ -182,15 +193,17 @@ SmartGrid<T>::erode(size_t radius, size_t border, double ratio)
     }
     else
       it2++;
-
+    //这里else只有这一句
     it++;
-  }
+    }
+  //用副本的原因：以最初的深度点分布，来判定哪些需要去掉。
 }
 
 template<class T>
 void
 SmartGrid<T>::dilate(size_t radius)
 {
+  //在每个生成点的半径内填充满初始化的点
   //have to save a temporary copy of the depth map
   SmartGrid gridTmp(rows(), cols());
 
@@ -237,6 +250,8 @@ SmartGrid<T>::clean(
   double range_min)
 {
   //first clean the elements and remove any items that are not valid anymore
+  //考虑到erase导致迭代器失效，先对其加法。貌似直接it++也可以
+  //为什么需要考虑valid
   typename gridElements::iterator it = _elements.begin();
   while (it != _elements.end())
   {
@@ -312,12 +327,14 @@ SmartGrid<T>::cols() const
   return (*_grid.front()).size();
 }
 
+  
 template<class T>
 void
 SmartGrid<T>::set(size_t row, size_t col, const T &value)
 {
   if ((*_grid[row])[col] == NULL)
   {
+    //初始化该像素点对应的深度点，不用value
     _elements.push_back(T(row, col));
     (*(_grid[row]))[col] = &const_cast<T &>(_elements.back());
   }
@@ -386,7 +403,8 @@ SmartGrid<T>::getNeighbourhood(
       //check whether this location is inside the image
       if (r >= 0 && r < (int) rows() &&
           c >= 0 && c < (int) cols())
-      {
+    
+        //判断指针是否为null，at常量函数常量引用返回值，get引用返回值
         if (exists(r, c) && at(r, c).valid())
           neighbours.push_back(&get(r, c));
       }
