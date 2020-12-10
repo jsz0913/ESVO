@@ -25,7 +25,7 @@ public:
   ResidualItem(const double x,const double y,const double z);
   void initialize(const double x,const double y,const double z);
 };
-
+//Eigen管理内存和C++11中的方法是不一样的，因此Eigen::aligned_allocator<ResidualItem>
 using ResidualItems = std::vector<ResidualItem, Eigen::aligned_allocator<ResidualItem> >;
 }// namespace container
 }// namespace esvo_core
