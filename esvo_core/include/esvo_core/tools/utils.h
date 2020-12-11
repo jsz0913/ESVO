@@ -35,12 +35,18 @@ namespace tools
 #define NUM_THREAD_TRACKING 1
 #define NUM_THREAD_MAPPING 4
 
+// PointCloud 3D点云
 typedef pcl::PointCloud<pcl::PointXYZ> PointCloud;
+// RefPointCloudMap 对应时间的地图
 using RefPointCloudMap = std::map<ros::Time, PointCloud::Ptr>;
-
+// 最小转换库
 using Transformation = kindr::minimal::QuatTransformation;
-
+// 事件队列
 using EventQueue = std::deque<dvs_msgs::Event>;
+
+// 有序EventQueue 二分查找第一个时间更早的事件
+// 正常是前三项，第四项定义了规则。lamada[]针对局部变量？
+// static inline 和 inline static
 inline static EventQueue::iterator EventBuffer_lower_bound(
   EventQueue& eb, ros::Time& t)
 {
@@ -54,7 +60,7 @@ inline static EventQueue::iterator EventBuffer_upper_bound(
   return std::upper_bound(eb.begin(), eb.end(), t,
     [](const ros::Time & t, const dvs_msgs::Event & e) {return t.toSec() < e.ts.toSec();});
 }
-
+// using Transformation = kindr::minimal::QuatTransformation;
 using StampTransformationMap = std::map<ros::Time, tools::Transformation>;
 inline static StampTransformationMap::iterator StampTransformationMap_lower_bound(
   StampTransformationMap& stm, ros::Time& t)
@@ -64,6 +70,7 @@ inline static StampTransformationMap::iterator StampTransformationMap_lower_boun
 }
 
 /******************* Used by Block Match ********************/
+// 
 static inline void meanStdDev(
   Eigen::MatrixXd& patch,
   double& mean, double& sigma)
@@ -85,6 +92,7 @@ static inline void normalizePatch(
 }
 
 // recursively create a directory
+//碰到/就创建，0为什么
 static inline void _mkdir(const char *dir)
 {
   char tmp[256];
