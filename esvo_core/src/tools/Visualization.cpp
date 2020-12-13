@@ -9,6 +9,8 @@ Visualization::Visualization() {}
 
 Visualization::~Visualization() {}
 
+//DepethMap::Ptr using DepthMap = SmartGrid<DepthPoint>  SmartGrid.h 
+//输出为img
 void
 Visualization::plot_map(
   DepthMap::Ptr &depthMapPtr,
@@ -22,6 +24,7 @@ Visualization::plot_map(
   size_t height = depthMapPtr->rows();
   size_t width = depthMapPtr->cols();
   img = cv::Mat(cv::Size(width, height), CV_8UC1, cv::Scalar(0));
+  //为什么不直接设置
   cv::cvtColor(img, img, CV_GRAY2BGR);
 
   switch(vmType)
@@ -30,8 +33,10 @@ Visualization::plot_map(
     {
       std::vector<double> vDepth;
       vDepth.reserve(10000);
+      //遍历smartgrid中的depthpoint
       for (auto it = depthMapPtr->begin(); it != depthMapPtr->end(); it++)
       {
+        //check depeth point  valid variance age  why used threshold
         if (it->valid()
             && it->variance() < pow(visualization_threshold1, 2)
             && it->age() >= (int) visualization_threshold2)
