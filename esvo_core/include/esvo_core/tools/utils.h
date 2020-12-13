@@ -92,7 +92,7 @@ static inline void normalizePatch(
 }
 
 // recursively create a directory
-//碰到/就创建，0为什么
+//碰到0就结束
 static inline void _mkdir(const char *dir)
 {
   char tmp[256];
