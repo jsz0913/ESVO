@@ -104,16 +104,20 @@ void Visualization::DrawPoint(
   cv::circle(img, point, 1, color, CV_FILLED);
 }
 
+//有事件产生的地方为255
 void Visualization::plot_eventMap(
   std::vector<dvs_msgs::Event*>& vEventPtr,
   cv::Mat & eventMap,
   size_t row, size_t col)
 {
+  //eventMap被赋值前什么样
   eventMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
   for(size_t i = 0; i < vEventPtr.size(); i++)
     eventMap.at<uchar>(vEventPtr[i]->y, vEventPtr[i]->x) = 255;
 }
 
+//std::vector<Eigen::Matrix<double,2,1>,Eigen::aligned_allocator<Eigen::Matrix<double,2,1> > >
+//Eigen放到STL中的写法
 void Visualization::plot_events(
   std::vector<Eigen::Matrix<double,2,1>,
     Eigen::aligned_allocator<Eigen::Matrix<double,2,1> > > & vEvents,
