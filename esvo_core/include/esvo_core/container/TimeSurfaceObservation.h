@@ -26,6 +26,8 @@ namespace container
 {
 struct TimeSurfaceObservation
 {
+  //using Transformation = kindr::minimal::QuatTransformation;
+  //没有初始化 cvImagePtr_left_ cvImagePtr_right_
   TimeSurfaceObservation(
     cv_bridge::CvImagePtr &left,
     cv_bridge::CvImagePtr &right,
@@ -35,6 +37,7 @@ struct TimeSurfaceObservation
     : tr_(tr),
       id_(id)
   {
+    //初始化 TS_left_ TS_right_
     cv::cv2eigen(left->image, TS_left_);
     cv::cv2eigen(right->image, TS_right_);
 
@@ -44,6 +47,7 @@ struct TimeSurfaceObservation
       TicToc tt;
       tt.tic();
 #endif
+      //计算x和y方向sobel，初始化dTS_du_left_ dTS_dv_left_
       cv::Mat cv_dSAE_du_left, cv_dSAE_dv_left;
       cv::Sobel(left->image, cv_dSAE_du_left, CV_64F, 1, 0);
       cv::Sobel(left->image, cv_dSAE_dv_left, CV_64F, 0, 1);
@@ -56,6 +60,7 @@ struct TimeSurfaceObservation
   }
 
   // override version without initializing the transformation in the constructor.
+  // 不初始化transformation的版本
   TimeSurfaceObservation(
     cv_bridge::CvImagePtr &left,
     cv_bridge::CvImagePtr &right,
@@ -63,6 +68,7 @@ struct TimeSurfaceObservation
     bool bCalcSaeGradient = false)
     : id_(id)
   {
+    //初始化cvImagePtr_left_ cvImagePtr_right_
     cvImagePtr_left_ = left;
     cvImagePtr_right_ = right;
     cv::cv2eigen(left->image, TS_left_);
@@ -107,6 +113,7 @@ struct TimeSurfaceObservation
   inline void GaussianBlurTS(size_t kernelSize)
   {
     cv::Mat mat_left_, mat_right_;
+    //如果sigmaX和sigmaY都是0，那么就由ksize.width和ksize.height计算出来
     cv::GaussianBlur(cvImagePtr_left_->image, mat_left_,
                      cv::Size(kernelSize, kernelSize), 0.0);
     cv::GaussianBlur(cvImagePtr_right_->image, mat_right_,
@@ -146,6 +153,7 @@ struct TimeSurfaceObservation
     cv::cv2eigen(cv_dFlippedSAE_dv_left, dTS_negative_dv_left_);
   }
 
+  //Eigen存储，后两个为sobel两个方向
   Eigen::MatrixXd TS_left_, TS_right_;
   Eigen::MatrixXd TS_blurred_left_;
   Eigen::MatrixXd TS_negative_left_;
@@ -164,6 +172,7 @@ struct ROSTimeCmp
   }
 };
 
+//ROSTimeCmp存入
 using TimeSurfaceHistory = std::map<ros::Time, TimeSurfaceObservation, ROSTimeCmp>;
 using StampedTimeSurfaceObs = std::pair<ros::Time, TimeSurfaceObservation>;
 
