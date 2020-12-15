@@ -29,7 +29,10 @@ void PerspectiveCamera::setIntrinsicParameters(
   K_ = Eigen::Matrix<double,3,3,Eigen::RowMajor>(vK.data());
   RectMat_ = Eigen::Matrix<double,3,3,Eigen::RowMajor>(vRectMat.data());
   P_ = Eigen::Matrix<double,3,4,Eigen::RowMajor>(vP.data());
-
+  //D_ 4*1
+  //K_ 3*3 内参矩阵
+  //RectMat_ 3*3
+  //P_ 3*4
   preComputeRectifiedCoordinate();
 }
 
@@ -37,6 +40,7 @@ void PerspectiveCamera::preComputeRectifiedCoordinate()
 {
   precomputed_rectified_points_ = Eigen::Matrix2Xd(2, height_ * width_);
 
+  //按行排，生成初始的坐标
   cv::Mat_<cv::Point2f> RawCoordinates(1, width_ * height_);
   for (int y = 0; y < height_; y++)
   {
@@ -46,27 +50,33 @@ void PerspectiveCamera::preComputeRectifiedCoordinate()
       RawCoordinates(index) = cv::Point2f((float) x, (float) y);
     }
   }
-
+  //校正后坐标系
   cv::Mat_<cv::Point2f> RectCoordinates(1, height_ * width_);
+  //K、DistCoeff、Rect、P
   cv::Mat cvKmat(3, 3, CV_64F);
   cv::Mat cvDistCoeff(1, 4, CV_64F);
   cv::Mat cvRectMat(3, 3, CV_64F);
   cv::Mat cvPmat(3, 4, CV_64F);
 
   cv::eigen2cv(K_, cvKmat);
+  //4*1 to 1*4
   cv::eigen2cv(D_, cvDistCoeff);
   cv::eigen2cv(RectMat_, cvRectMat);
   cv::eigen2cv(P_, cvPmat);
   if (distortion_model_ == "plumb_bob")
   {
+    //原坐标，矫正坐标，K、D、R、P 注意输入输出都是point2f
     cv::undistortPoints(RawCoordinates, RectCoordinates, cvKmat, cvDistCoeff, cvRectMat, cvPmat);
 #if CV_MAJOR_VERSION >= 3
     cv::Size sensor_size(width_, height_);
+    //initUndistortRectifyMap
     cv::initUndistortRectifyMap(cvKmat, cvDistCoeff,cvRectMat, cvPmat,
        sensor_size, CV_32FC1, undistort_map1_, undistort_map2_);
+    //remap 原为单位阵，undistort_map1_ undistort_map2_
     cv::Mat cvSrcMask = cvSrcMask.ones(height_, width_, CV_32F);
     cv::Mat cvDstMask = cvSrcMask.zeros(height_, width_, CV_32F);
     cv::remap(cvSrcMask, cvDstMask, undistort_map1_, undistort_map2_, CV_INTER_LINEAR);
+    //cv::threshold 0.999为阈值 255为cvDstMask最大值，将其二值化
     cv::threshold(cvDstMask, cvDstMask, 0.999, 255, cv::THRESH_BINARY);
     cvDstMask.convertTo(cvDstMask, CV_8U);
     cv::cv2eigen(cvDstMask, UndistortRectify_mask_);
@@ -123,6 +133,7 @@ PerspectiveCamera::cam2World(
   double invDepth,
   Eigen::Vector3d &p)
 {
+  //为满足齐次坐标对应 都为4*1
   double z = 1.0 / invDepth;
   Eigen::Matrix<double, 4, 1> x_ss;
   x_ss << x(0),
@@ -149,6 +160,7 @@ PerspectiveCamera::world2Cam(
 
 /************************************************************/
 /************************************************************/
+//CameraSystem 组成双目
 CameraSystem::CameraSystem(const std::string& calibInfoDir, bool bPrintCalibInfo)
 {
   cam_left_ptr_ = std::shared_ptr<PerspectiveCamera>(new PerspectiveCamera());
@@ -164,9 +176,10 @@ void CameraSystem::computeBaseline()
     cam_right_ptr_->P_.block<3,1>(0,3);
   baseline_ = temp.norm();
 }
-
+//从yaml读入两个相机
 void CameraSystem::loadCalibInfo(const std::string &cameraSystemDir, bool bPrintCalibInfo)
 {
+  
   const std::string left_cam_calib_dir(cameraSystemDir + "/left.yaml");
   const std::string right_cam_calib_dir(cameraSystemDir + "/right.yaml");
   YAML::Node leftCamCalibInfo = YAML::LoadFile(left_cam_calib_dir);
@@ -181,7 +194,7 @@ void CameraSystem::loadCalibInfo(const std::string &cameraSystemDir, bool bPrint
   std::vector<double> vD_left, vK_left, vRectMat_left, vP_left;
   std::vector<double> vD_right, vK_right, vRectMat_right, vP_right;
   std::vector<double> vT_right_left;
-
+  //perspectivecamera参数为 vector的原因如下 
   vD_left = leftCamCalibInfo["distortion_coefficients"]["data"].as< std::vector<double> >();
   vK_left = leftCamCalibInfo["camera_matrix"]["data"].as< std::vector<double> >();
   vRectMat_left = leftCamCalibInfo["rectification_matrix"]["data"].as< std::vector<double> >();
