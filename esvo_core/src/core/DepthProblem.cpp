@@ -25,9 +25,11 @@ void DepthProblem::setProblem(
 
   vT_left_virtual_.clear();
   vT_left_virtual_.reserve(1);
+  // T_left_world = left 到 world的变换，tr_为world到left的变换
   Eigen::Matrix<double,4,4> T_left_world = pStampedTsObs_->second.tr_.inverse().getTransformationMatrix();
   Eigen::Matrix<double,4,4> T_left_virtual = T_left_world * T_world_virtual_;
   vT_left_virtual_.push_back(T_left_virtual.block<3,4>(0,0));
+  //父类resetNumberValues
   resetNumberValues(dpConfigPtr_->patchSize_X_ * dpConfigPtr_->patchSize_Y_);
 }
 
