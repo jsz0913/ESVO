@@ -78,7 +78,7 @@ SmartGrid<T>::SmartGrid(size_t rows, size_t cols)
   }
 }
 
-//delete元素中每个向量指针指向的内存空间，即elements
+//new std::vector<T *>() delete new的部分
 template<class T>
 SmartGrid<T>::~SmartGrid()
 {
