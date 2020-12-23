@@ -97,7 +97,7 @@ SmartGrid<T>::operator=(const SmartGrid &rhs)
   for (size_t r = 0; r < rows(); r++)
     delete _grid[r];
   _grid.clear();
-  //delete释放的指针指向的向量，而不是存储删除指针本身。vector.clear()后size变为0，但容量不变
+  //delete后要clear，使得第一维大小变0 因为delete不改变大小
   
   //initialize a new NULL grid with correct size
   for (size_t r = 0; r < rhs.rows(); r++)
@@ -124,7 +124,7 @@ SmartGrid<T>::resize(size_t rows, size_t cols)
 {
   this->reset();
   //列表_element清空，网格全置为空指针
-  //如果reserve的rows比之前大，相当于在之前基础上继续扩展rows？？
+  //多加的行数
   _grid.reserve(rows);
   for (size_t r = 0; r < rows; r++)
   {
@@ -239,6 +239,7 @@ SmartGrid<T>::dilate(size_t radius)
 
     it++;
   }
+  //用副本的原因：增加最初的分布点周围
 }
 
 template<class T>
@@ -320,6 +321,7 @@ SmartGrid<T>::rows() const
   return _grid.size();
 }
 
+ //_grid.front() 取出第一个vector<T*>指针
 template<class T>
 size_t
 SmartGrid<T>::cols() const
@@ -334,10 +336,11 @@ SmartGrid<T>::set(size_t row, size_t col, const T &value)
 {
   if ((*_grid[row])[col] == NULL)
   {
-    //初始化该像素点对应的深度点，不用value
+    //指针为null，初始化该像素点对应的深度点放入列表，取其地址
     _elements.push_back(T(row, col));
     (*(_grid[row]))[col] = &const_cast<T &>(_elements.back());
   }
+  //指针不为空的情况下直接赋值，注意实际是对列表中的元素进行修改
   (*_grid[row])[col]->copy(value);
 }
 
