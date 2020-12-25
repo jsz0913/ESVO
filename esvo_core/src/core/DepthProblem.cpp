@@ -171,9 +171,9 @@ bool DepthProblem::warping(
   // back-project to 3D
   Eigen::Vector3d p_rv;
   camSysPtr_->cam_left_ptr_->cam2World(x, d, p_rv);
-  // transfer to left DVS coordinate
+  // transfer to left DVS coordinate 从v上反投影，之后重投影到双目上
   Eigen::Vector3d p_left = T_left_virtual.block<3, 3>(0, 0) * p_rv + T_left_virtual.block<3, 1>(0, 3);
-  // project onto left and right DVS image plane
+  // project onto left and right DVS image plane 
   Eigen::Vector3d x1_hom = camSysPtr_->cam_left_ptr_->P_.block<3, 3>(0, 0) * p_left +
     camSysPtr_->cam_left_ptr_->P_.block<3, 1>(0, 3);
   Eigen::Vector3d x2_hom = camSysPtr_->cam_right_ptr_->P_.block<3, 3>(0, 0) * p_left +
@@ -185,6 +185,7 @@ bool DepthProblem::warping(
   int wy = dpConfigPtr_->patchSize_Y_;
   int width  = camSysPtr_->cam_left_ptr_->width_;
   int height = camSysPtr_->cam_left_ptr_->height_;
+  //判断两个像平面坐标，除以2？
   if (x1_s(0) < (wx - 1) / 2 || x1_s(0) > width - (wx - 1) / 2 || x1_s(1) < (wy - 1) / 2 || x1_s(1) > height - (wy - 1) / 2)
     return false;
   if (x2_s(0) < (wx - 1) / 2 || x2_s(0) > width - (wx - 1) / 2 || x2_s(1) < (wy - 1) / 2 || x2_s(1) > height - (wy - 1) / 2)
@@ -226,10 +227,13 @@ bool DepthProblem::patchInterpolation(
   // compute q1 q2 q3 q4
   Eigen::Vector2d double_indices;
   double_indices << location[1], location[0];
-
+  //floor(location[1])
   std::pair<int, int> lower_indices(floor(double_indices[0]), floor(double_indices[1]));
   std::pair<int, int> upper_indices(lower_indices.first + 1, lower_indices.second + 1);
-
+  //q1 (floor(location[0])+1)-location[0]
+  //q2 location[0]-floor(location[0])
+  //q3 (floor(location[1])+1)-location[1]
+  //q4 location[1]-floor(location[1])
   double q1 = upper_indices.second - double_indices[1];// x
   double q2 = double_indices[1] - lower_indices.second;// x
   double q3 = upper_indices.first - double_indices[0];// y
