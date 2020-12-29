@@ -37,8 +37,10 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
   size_t wy = dpConfigPtr_->patchSize_Y_;
   size_t patchSize = wx * wy;
   int numValid  = 0;
-
+  //x(0)深度
   Eigen::Vector2d x1_s, x2_s;
+  
+  //warping失败
   if(!warping(coordinate_, x(0), vT_left_virtual_[0], x1_s, x2_s))
   {
     if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
@@ -60,6 +62,7 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
   }
 
   Eigen::MatrixXd tau1, tau2;
+  //warping后的点，对TS进行pacthInerpolation
   if (patchInterpolation(pStampedTsObs_->second.TS_left_, x1_s, tau1)
     && patchInterpolation(pStampedTsObs_->second.TS_right_, x2_s, tau2))
   {
@@ -83,6 +86,7 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
           tools::meanStdDev(tau1, mu1, sigma1);
           tools::meanStdDev(tau2, mu2, sigma2);
           fvec[index] = ((tau1(y,x) - mu1) / sigma1 - (tau2(y,x) - mu2) / sigma2) / sqrt(patchSize);
+          //对应点的zncc值，warping失败的地方赋值默认值
         }
     }
     else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
@@ -132,14 +136,15 @@ int DepthProblem::operator()( const Eigen::VectorXd &x, Eigen::VectorXd & fvec )
           double weight = (dpConfigPtr_->td_nu_ + 1) / (dpConfigPtr_->td_nu_ + vResidualSquared[index] / scaleSquaredTmp2);
           fvec[index] = sqrt(weight) * vResidual[index];
         }
-      }
-    }
+      }//while
+    }//if tdist
     else
       exit(-1);
     numValid = 1;
   }
   else
   {
+    //pacthinterpolation失败，也全都赋值
     if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
       for(size_t i = 0; i < patchSize; i++)
         fvec[i] = 255;
@@ -166,6 +171,8 @@ bool DepthProblem::warping(
   Eigen::Vector2d &x1_s,
   Eigen::Vector2d &x2_s) const
 {
+  //投影矩阵固定，相机坐标系到相平面
+  //T_left_virtual 应该是virtual view到stereo observation
   // back-project to 3D
   Eigen::Vector3d p_rv;
   camSysPtr_->cam_left_ptr_->cam2World(x, d, p_rv);
