@@ -67,6 +67,7 @@ void esvo_core::core::EventBM::createMatchProblem(
 
   if(bSmoothTS_)
   {
+    //pStampedTsObs_ 是否null
     if(pStampedTsObs_)
       pStampedTsObs_->second.GaussianBlurTS(5);
   }
@@ -91,12 +92,13 @@ bool esvo_core::core::EventBM::match_an_event(
     return false;
   Eigen::Vector2i x1(std::floor(x_rect(0)), std::floor(x_rect(1)));
   Eigen::Vector2i x1_left_top;
+  //根据patch和x计算左上和右下
   if(!isValidPatch(x1, x1_left_top))
     return false;
   // extract the template patch in the left time_surface
   Eigen::MatrixXd patch_src = pStampedTsObs_->second.TS_left_.block(
     x1_left_top(1), x1_left_top(0), patch_size_Y_, patch_size_X_);
-
+  // <1的太多
   if((patch_src.array() < 1).count() > 0.95 * patch_src.size())
   {
 //    LOG(INFO) << "Low info-noise-ratio. @@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@@";
@@ -169,11 +171,13 @@ bool esvo_core::core::EventBM::epipolarSearching(
   Eigen::Vector2i& x1, Eigen::MatrixXd& patch_src, bool bUpDownConfiguration)
 {
   bool bFoundOneMatch = false;
+  //disp对应zncc
   std::map<size_t, double> mDispCost;
 
   for(size_t disp = searching_start_pos;disp <= searching_end_pos; disp+=searching_step)
   {
     Eigen::Vector2i x2;
+    //TSright patch 的x2 都在 x1 左上角？
     if(!bUpDownConfiguration)
       x2 << x1(0) - disp, x1(1);
     else
@@ -202,6 +206,7 @@ bool esvo_core::core::EventBM::epipolarSearching(
 
   if(searching_step > 1)// coarse
   {
+    //最佳位置前后两个不为最后一个
     if(mDispCost.find(bestDisp - searching_step) != mDispCost.end() &&
        mDispCost.find(bestDisp + searching_step) != mDispCost.end())
     {
@@ -248,6 +253,7 @@ bool esvo_core::core::EventBM::isValidPatch(
   Eigen::Vector2i& x,
   Eigen::Vector2i& left_top)
 {
+  //wx、wy是中心点到边缘的差值
   int wx = (patch_size_X_ - 1) / 2;
   int wy = (patch_size_Y_ - 1) / 2;
   left_top = Eigen::Vector2i(x(0) - wx, x(1) - wy);
