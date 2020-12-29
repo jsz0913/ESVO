@@ -113,7 +113,7 @@ bool esvo_core::core::EventBM::match_an_event(
   Eigen::Vector2i bestMatch;
   size_t bestDisp;
   Eigen::MatrixXd patch_dst = Eigen::MatrixXd::Zero(patch_size_Y_, patch_size_X_);
-  // coarse searching
+  // coarse searching，lowDisparity, upDisparity, step_
   if(!epipolarSearching(min_cost, bestMatch, bestDisp, patch_dst,
     lowDisparity, upDisparity, step_,
     x1, patch_src, bUpDownConfiguration_))
@@ -122,7 +122,8 @@ bool esvo_core::core::EventBM::match_an_event(
     coarseSearchingFailNum_++;
     return false;
   }
-  // fine searching
+  // fine searching，fine_searching_start_pos, bestDisp+(step_-1), 1
+  // 利用粗搜索得到的bestDisp，在-(step_-1) ~ (step_+1) 上进行步长为1的搜索
   size_t fine_searching_start_pos = bestDisp-(step_-1) >= 0 ? bestDisp-(step_-1) : 0;
   if(!epipolarSearching(min_cost, bestMatch, bestDisp, patch_dst,
                     fine_searching_start_pos, bestDisp+(step_-1), 1,
@@ -134,21 +135,28 @@ bool esvo_core::core::EventBM::match_an_event(
 //    LOG(INFO) << "fine searching fails ...............";
     return false;
   }
+  //coarse searching，fine searching 全部返回true。
 
   // transfer best match to emPair
+  // min_cost <= ZNCC_Threshold_ 为什么判断？
   if(min_cost <= ZNCC_Threshold_)
   {
+    //
     emPair.x_left_raw_ = Eigen::Vector2d((double)pEvent->x, (double)pEvent->y);
     emPair.x_left_ = x_rect;
     emPair.x_right_ = Eigen::Vector2d((double)bestMatch(0), (double)bestMatch(1)) ;
+    
     emPair.t_ = pEvent->ts;
     double disparity;
     if(bUpDownConfiguration_)
+      //上下搜索
       disparity = x1(1) - bestMatch(1);
     else
       disparity = x1(0) - bestMatch(0);
+    //slam十四讲 p103 p（0，0）？
     double depth = camSysPtr_->baseline_ * camSysPtr_->cam_left_ptr_->P_(0,0) / disparity;
 
+     //eventpair 前最近的TF
     auto st_map_iter = tools::StampTransformationMap_lower_bound(*pSt_map_, emPair.t_);
     if(st_map_iter == pSt_map_->end())
       return false;
@@ -165,6 +173,7 @@ bool esvo_core::core::EventBM::match_an_event(
   }
 }
 
+//小于mincost即更新最佳匹配，但只有小于ZNCC_Threshold_时，返回true
 bool esvo_core::core::EventBM::epipolarSearching(
   double& min_cost, Eigen::Vector2i& bestMatch, size_t& bestDisp, Eigen::MatrixXd& patch_dst,
   size_t searching_start_pos, size_t searching_end_pos, size_t searching_step,
@@ -206,10 +215,11 @@ bool esvo_core::core::EventBM::epipolarSearching(
 
   if(searching_step > 1)// coarse
   {
-    //最佳位置前后两个不为最后一个
+    //最佳位置前后两个都存在
     if(mDispCost.find(bestDisp - searching_step) != mDispCost.end() &&
        mDispCost.find(bestDisp + searching_step) != mDispCost.end())
     {
+      //不仅存在，还小于znccmax
       if(mDispCost[bestDisp - searching_step] < ZNCC_MAX_ && mDispCost[bestDisp + searching_step] < ZNCC_MAX_ )
         if(min_cost < ZNCC_Threshold_)
           bFoundOneMatch = true;
@@ -274,9 +284,11 @@ void esvo_core::core::EventBM::match_all_HyperThread(
   std::vector<EventBM::Job> jobs(NUM_THREAD_);
   for(size_t i = 0;i < NUM_THREAD_; i++)
   {
+    //job共用一些
     jobs[i].i_thread_ = i;
     jobs[i].pvEventPtr_ = &vEventsPtr_;
     jobs[i].pvpDisparitySearchBound_ = &vpDisparitySearchBound_;
+    //输出量，使用智能指针
     jobs[i].pvEventMatchPair_ = std::make_shared<std::vector<EventMatchPair> >();
   }
 
@@ -294,6 +306,7 @@ void esvo_core::core::EventBM::match_all_HyperThread(
     numPoints += jobs[i].pvEventMatchPair_->size();
   vEMP.clear();
   vEMP.reserve(numPoints);
+  //最后合并到一起
   for(size_t i = 0;i < NUM_THREAD_;i++)
     vEMP.insert(vEMP.end(), jobs[i].pvEventMatchPair_->begin(), jobs[i].pvEventMatchPair_->end());
 }
@@ -303,10 +316,13 @@ void esvo_core::core::EventBM::match(
 {
   size_t i_thread = job.i_thread_;
   size_t totalNumEvents = job.pvEventPtr_->size();
+  //将事件对任务按线程分，+1是为了有小数情况
   job.pvEventMatchPair_->reserve(totalNumEvents / NUM_THREAD_ + 1);
 
   auto ev_it = job.pvEventPtr_->begin();
+  //移动迭代器
   std::advance(ev_it, i_thread);
+  //将事件流切开，每段长度为线程数
   for(size_t i = i_thread; i < totalNumEvents; i+=NUM_THREAD_, std::advance(ev_it, NUM_THREAD_))
   {
     EventMatchPair emp;
