@@ -163,7 +163,7 @@ DepthPoint::update(
   boundVariance();
 }
 
-//T分布更新：论文中u s v 对应 nu_ invDepth scaleSquared
+//T分布更新：论文中v u s对应 nu_ invDepth scaleSquared
 void
 DepthPoint::update_studentT(double invDepth, double scale2, double variance, double nu)
 {
