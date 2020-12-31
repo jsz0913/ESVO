@@ -86,17 +86,20 @@ void DepthProblemSolver::solve_multiple_problems(Job & job)
 
   StampedTimeSurfaceObs* pStampedTsObs = job.pStamped_TS_obs_;
 
-  // loop through vdp and call solve_single_problem
+  // loop through vdp and call solve_single_problem，事件对按线程数分
   for(size_t i = i_thread; i < numEvent; i+=NUM_THREAD_)
   {
     Eigen::Vector2d coor = (*job.pvEMP_)[i].x_left_;
+    //事件对发生时的位置  V到W
     Eigen::Matrix<double, 4, 4> T_world_virtual = (*job.pvEMP_)[i].trans_.getTransformationMatrix();
     double d_init = (*job.pvEMP_)[i].invDepth_;
 
-    double result[3];
+    double result[3];//invdepth variance residual
     bool bProblemSolved = false;
     if(dpType_ == NUMERICAL)
     {
+      //设置问题，已知eventmatchpair和TS
+      //为什么要把事件对里拿出来
       job.numDiff_dProblemPtr_->setProblem(coor, T_world_virtual, pStampedTsObs);
       bProblemSolved = solve_single_problem_numerical(d_init,job.numDiff_dProblemPtr_, result);
     }
@@ -113,16 +116,21 @@ void DepthProblemSolver::solve_multiple_problems(Job & job)
 
     if(bProblemSolved)
     {
+      //Depthpoinr构造函数为行和列，x_为double
       DepthPoint dp(std::floor(coor(1)), std::floor(coor(0)));
       dp.update_x(coor);
       Eigen::Vector3d p_cam;
       camSysPtr_->cam_left_ptr_->cam2World(coor, result[0], p_cam);
       dp.update_p_cam(p_cam);
+      //pdate(double invDepth, double variance);// Gaussian distribution
       if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
         dp.update(result[0], result[1]);
       else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
       {
+        //论文中v u s 对应 nu_ invDepth scaleSquared
+        //depthpoint是新点，所以v为dpConfigPtr_->td_nu_
         double scale2_rho = result[1] * (dpConfigPtr_->td_nu_ - 2) / dpConfigPtr_->td_nu_;
+        //update_studentT(double invDepth, double scale2, double variance, double nu); // T distribution
         dp.update_studentT(result[0], scale2_rho, result[1], dpConfigPtr_->td_nu_);
       }
       else
@@ -130,6 +138,7 @@ void DepthProblemSolver::solve_multiple_problems(Job & job)
 
       dp.residual() = result[2];
       dp.updatePose(T_world_virtual);
+      //把事件对的T_world_virtual存入
       job.vdpPtr_->push_back(dp);
     }
   }
@@ -140,10 +149,11 @@ bool DepthProblemSolver::solve_single_problem_numerical(
   std::shared_ptr< Eigen::NumericalDiff<DepthProblem> > & dProblemPtr,
   double* result)
 {
+  //
   Eigen::VectorXd x(1);
   x << d_init;
-
-  Eigen::LevenbergMarquardt<Eigen::NumericalDiff<DepthProblem>, double> lm(*(dProblemPtr.get()));
+  //get返回传统指针
+  Eigen::LevenbergMarquardt<Eigen::NumericalDiff<DepthProblem>, double> lm(* (dProblemPtr.get()) );
   lm.resetParameters();
   lm.parameters.ftol = 1e-6;//1.E10*Eigen::NumTraits<double>::epsilon();
   lm.parameters.xtol = 1e-6;//1.E10*Eigen::NumTraits<double>::epsilon();
@@ -157,7 +167,9 @@ bool DepthProblemSolver::solve_single_problem_numerical(
 
   size_t iteration = 0;
   int optimizationState = 0;
-
+  //迭代次数达到跳出循环
+  //status == 2 || status == 3 第一次会使得optimizationState变1，然后terminate变true，然后跳出循环
+  //为什么不直接判断optimizationState为1？
   while(true)
   {
     Eigen::LevenbergMarquardtSpace::Status status = lm.minimizeOneStep(x);
