@@ -336,6 +336,7 @@ RegProblemLM::getWarpingTransformation(
   Eigen::Matrix4d& warpingTransf,
   const Eigen::Matrix<double, 6, 1>& x) const
 {
+  // 利用R_ t_ 但不更新
   // To calcuate R_cur_ref, t_cur_ref
   Eigen::Matrix3d R_cur_ref;
   Eigen::Vector3d t_cur_ref;
@@ -344,6 +345,7 @@ RegProblemLM::getWarpingTransformation(
   Eigen::Vector3d dt = x.block<3,1>(3,0);
   // add rotation
   Eigen::Matrix3d dR = tools::cayley2rot(dc);
+  //这句与addupdate刚好相反
   Eigen::Matrix3d newR = R_.transpose() * dR.transpose();
   Eigen::JacobiSVD<Eigen::Matrix3d> svd(newR, Eigen::ComputeFullU | Eigen::ComputeFullV );
   R_cur_ref = svd.matrixU() * svd.matrixV().transpose();
@@ -352,6 +354,7 @@ RegProblemLM::getWarpingTransformation(
     LOG(INFO) << "oops the matrix is left-handed\n";
     exit(-1);
   }
+  //负值向量方向相反，之后旋转
   t_cur_ref = -R_cur_ref * ( dt + dR * t_ );
   warpingTransf.block<3,3>(0,0) = R_cur_ref;
   warpingTransf.block<3,1>(0,3) = t_cur_ref;
