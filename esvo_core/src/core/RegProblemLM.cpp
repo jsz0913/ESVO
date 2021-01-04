@@ -485,7 +485,7 @@ bool RegProblemLM::patchInterpolation(
   double q3 = upper_indices.first - double_indices[0];
   double q4 = double_indices[0] - lower_indices.first;
 
-  // extract Src patch, size (wy+1) * (wx+1)
+  // extract Src patch, size (wy+1) * (wx+1) 最终是从左上角开始取 (wy+1) * (wx+1)  为了偶数？
   int wx2 = wx + 1;
   int wy2 = wy + 1;
   if (SrcPatch_UpLeft[1] + wy >= img.rows() || SrcPatch_UpLeft[0] + wx >= img.cols())
