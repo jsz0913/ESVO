@@ -14,12 +14,15 @@ DepthFusion::DepthFusion(
 
 DepthFusion::~DepthFusion() {}
 
+//只是传播过去，同时一些参数需要变化
 bool
 DepthFusion::propagate_one_point(
   DepthPoint &dp_prior,
   DepthPoint &dp_prop,
   Eigen::Matrix<double, 4, 4> &T_prop_prior)
 {
+  //p_prop x_prop 都是dp_prior投影后的点
+  //相机坐标系的转换p_prop
   Eigen::Vector3d p_prop = T_prop_prior.block<3, 3>(0, 0) * dp_prior.p_cam() +
                            T_prop_prior.block<3, 1>(0, 3);
 
@@ -29,6 +32,7 @@ DepthFusion::propagate_one_point(
                      camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_))
     return false;
 
+  // 根据整数行列创建一个一样的深度点，2D坐标
   // create a depth point with propagated attributes.
   size_t row = std::floor(x_prop(1));
   size_t col = std::floor(x_prop(0));
@@ -39,11 +43,12 @@ DepthFusion::propagate_one_point(
   double invDepth = 1.0 / p_prop(2);
 
   // compute the jacobian
+  // 难道不是p_prop的第三项的值除以z？
   double denominator = T_prop_prior.block<1,2>(2,0) * dp_prior.p_cam().head(2) + T_prop_prior(2, 3);
   denominator /= dp_prior.p_cam()(2);
   denominator += T_prop_prior(2,2);
   double J = T_prop_prior(2,2) / pow(denominator, 2);
-
+  //就是新生成深度点基础上，加了一步计算J而不是直接update
   // propagation
   double variance, scale2, nu;
   if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
@@ -56,6 +61,7 @@ DepthFusion::propagate_one_point(
     scale2 = J * J * dp_prior.scaleSquared();
     nu = dp_prior.nu();
     variance = nu / (nu - 2) * scale2;
+    //dp_prop被更新
     dp_prop.update_studentT(invDepth, scale2, variance, nu);
   }
   else
@@ -96,8 +102,10 @@ DepthFusion::fusion(
   int numFusion = 0;
   // get neighbour pixels involved in fusion
   std::vector<std::pair<size_t, size_t> > vpCoordinate;// pair: <row, col>
+  //根据fusion_radius得出周围点的行列
   if(fusion_radius == 0)
   {
+    //行列为左上角的四个
     const size_t patchSize = 4;
     vpCoordinate.reserve(patchSize);
     size_t row_topleft = dp_prop.row();
@@ -108,6 +116,7 @@ DepthFusion::fusion(
   }
   else
   {
+    //行列为中心的patchSize个
     const size_t patchSize = (2*fusion_radius+1) * (2*fusion_radius+1);
     vpCoordinate.reserve(patchSize);
     size_t row_centre = dp_prop.row();
@@ -121,9 +130,9 @@ DepthFusion::fusion(
   {
     size_t row = vpCoordinate[i].first;
     size_t col = vpCoordinate[i].second;
+    //考虑到传播点在边角的情况
     if(!boundaryCheck(col, row, camSysPtr_->cam_left_ptr_->width_, camSysPtr_->cam_left_ptr_->height_))
       continue;
-
     // case 1: non-occupied
     if (!dm->exists(row, col))
     {
@@ -167,17 +176,20 @@ DepthFusion::fusion(
           dm->get(row, col).update_studentT(dp_prop.invDepth(), dp_prop.scaleSquared(), dp_prop.variance(), dp_prop.nu());
         else
           exit(-1);
-
+        //residual
         dm->get(row, col).age()++;
         dm->get(row, col).residual() = min(dm->get(row, col).residual(), dp_prop.residual());
         Eigen::Vector3d p_update;
+        //为什么逆深度使用dp_prop而不是融合后？
         camSysPtr_->cam_left_ptr_->cam2World(dm->get(row, col).x(), dp_prop.invDepth(), p_update);
         dm->get(row, col).update_p_cam(p_update);
         numFusion++;
       }
       else // case 2.2 not compatible
       {
+  
         // consider occlusion (the pixel is already assigned with a point that is closer to the camera)
+        // 即使方差小，还需考虑减去后的条件
         if (dm->at(row, col).invDepth() - 2 * sqrt(dm->at(row, col).variance()) > dp_prop.invDepth())
           continue;
         if (dp_prop.variance() < dm->at(row, col).variance()
@@ -217,6 +229,7 @@ DepthFusion::chiSquareTest(
     return false;
 }
 
+// 与论文相同
 bool
 DepthFusion::studentTCompatibleTest(
   double invD1, double invD2,
@@ -238,6 +251,7 @@ DepthFusion::naive_propagation(
   Eigen::Matrix<double, 4, 4> T_frame_world = df->T_world_frame_.inverse().getTransformationMatrix();
   for (size_t i = 0; i < dp_obs.size(); i++)
   {
+    
     Eigen::Matrix<double, 4, 4> T_frame_obs = T_frame_world * dp_obs[i].T_world_cam();
     DepthPoint dp_prop;
     if (!propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
