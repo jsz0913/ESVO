@@ -21,26 +21,30 @@ void DepthRegularization::apply( DepthMap::Ptr& depthMapPtr )
   DepthMap &dm = *depthMapPtr.get();
 
   DepthMap dmTmp(dm.rows(), dm.cols());
-
+  // typedef typename gridElements::iterator iterator
   DepthMap::iterator it = dm.begin();
+  //遍历的dm，对dmTmp赋值和取出newDp
   while (it != dm.end())
   {
+    //dmTmp
     dmTmp.set(it->row(), it->col(), *it);
     DepthPoint &newDp = dmTmp.get(it->row(), it->col());
 
     if (it->valid())
     {
-      //get the valid neighbourhood pixels
+      //get the valid neighbourhood pixels，根据原深度图得出，要不然改变一些深度影响后续
       std::vector<DepthPoint *> neighbours;
       dm.getNeighbourhood(it->row(), it->col(), _regularizationRadius, neighbours);
 
       bool isSet = false;
+      //周围有效深度点个数
       if (neighbours.size() > _regularizationMinNeighbours)
       {
         //find close neighbours (will include this point)
         std::vector<DepthPoint *> closeNeighbours;
         for (size_t i = 0; i < neighbours.size(); i++)
         {
+          //neighbours pushback时检测过
           if (neighbours[i]->valid())
           {
             double diff = fabs(it->invDepth() - neighbours[i]->invDepth());
@@ -65,20 +69,22 @@ void DepthRegularization::apply( DepthMap::Ptr& depthMapPtr )
           }
           else if(strcmp(dpConfigPtr_->LSnorm_.c_str(), "Tdist") == 0)
           {
+            //先验后验融合，注意前验需要有个开始值，需要循环
             double nu_post = closeNeighbours[0]->nu();
             double invDepth_post = closeNeighbours[0]->invDepth();
             double scale2_post = closeNeighbours[0]->scaleSquared();
 
             for (size_t i = 1; i < closeNeighbours.size(); i++)
             {
+              //prior，循环
               double nu_prior = nu_post;
               double invDepth_prior = invDepth_post;
               double scale2_prior = scale2_post;
-
+              //obs
               double nu_obs = closeNeighbours[i]->nu();
               double invDepth_obs = closeNeighbours[i]->invDepth();
               double scale2_obs = closeNeighbours[i]->scaleSquared();
-
+              //post
               nu_post = std::min(nu_prior, nu_obs);
               invDepth_post = (scale2_obs * invDepth_prior + scale2_prior * invDepth_obs) / (scale2_obs + scale2_prior);
               scale2_post = (nu_post + pow(invDepth_prior - invDepth_obs,2) / (scale2_prior + scale2_obs)) /
@@ -95,15 +101,15 @@ void DepthRegularization::apply( DepthMap::Ptr& depthMapPtr )
           //set the statistical average (everything else is simply copied)
           newDp.invDepth() = statisticalMean;
           isSet = true;
-        }
-      }
+        }//if _regularizationMinCloseNeighbours
+      }// if _regularizationMinNeighbours
 
       if (!isSet)
         newDp.invDepth() = -1.0;
-    }
+    }//if valid
 
     it++;
-  }
+  }//while
 
   //transfer the result
   dm = dmTmp;
