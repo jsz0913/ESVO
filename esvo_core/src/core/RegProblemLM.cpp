@@ -27,9 +27,14 @@ void RegProblemLM::setProblem(RefFrame* ref, CurFrame* cur, bool bComputeGrad)
   cur_ = cur;
   T_world_ref_  = ref_->tr_.getTransformationMatrix();
   T_world_left_ = cur_->tr_.getTransformationMatrix();
+  
+  // left到ref ？
   Eigen::Matrix4d T_ref_left = T_world_ref_.inverse() * T_world_left_;
+  
   R_ = T_ref_left.block<3,3>(0,0);
   t_ = T_ref_left.block<3,1>(0,3);
+  
+  ////为什么要分开
   Eigen::Matrix3d R_world_ref = T_world_ref_.block<3,3>(0,0);
   Eigen::Vector3d t_world_ref = T_world_ref_.block<3,1>(0,3);
 
@@ -46,10 +51,14 @@ void RegProblemLM::setProblem(RefFrame* ref, CurFrame* cur, bool bComputeGrad)
   {
     bool bStochasticSampling = true;
     if (bStochasticSampling)
+      // 随机交换
       std::swap(ref->vPointXYZPtr_[i], ref->vPointXYZPtr_[i + rand() % (ref->vPointXYZPtr_.size() - i)]);
     Eigen::Vector3d p_tmp((double) ref->vPointXYZPtr_[i]->x,
                           (double) ref->vPointXYZPtr_[i]->y,
                           (double) ref->vPointXYZPtr_[i]->z);
+    // ref to world
+    // ref到world + world到ref -
+    // ref到world转 世界到ref
     Eigen::Vector3d p_cam = R_world_ref.transpose() * (p_tmp - t_world_ref);
     ResItems_[i].initialize(p_cam(0), p_cam(1), p_cam(2));//, var);
   }
@@ -58,10 +67,12 @@ void RegProblemLM::setProblem(RefFrame* ref, CurFrame* cur, bool bComputeGrad)
 
   // load cur's info
   pTsObs_ = cur->pTsObs_;
+  // 高斯blur 后 计算负时间表面存入
   pTsObs_->getTimeSurfaceNegative(rpConfigPtr_->kernelSize_);
   if(bComputeGrad)
+    // 计算负时间表面的sobel 分别存入
     pTsObs_->computeTsNegativeGrad();
-  // set fval dimension
+  // set fval dimension 函数值维度
   resetNumberValues(numPoints_ * patchSize_);
   if(bPrint_)
     LOG(INFO) << "RegProblemLM::setProblem succeeds.";
@@ -73,6 +84,7 @@ void RegProblemLM::setStochasticSampling(size_t offset, size_t N)
   ResItemsStochSampled_.reserve(N);
   for(size_t i = 0;i < N;i++)
   {
+    // offset+i ... N < ResItems_.size()
     if(offset + i >= ResItems_.size())
       break;
     ResItemsStochSampled_.push_back(ResItems_[offset + i]);
@@ -383,11 +395,13 @@ bool RegProblemLM::isValidPatch(
   size_t wx,
   size_t wy) const
 {
+  //第一部分，中心点与边的距离要保持在pathc一半以上
   if (patchCentreCoord(0) < (wx-1)/2 ||
       patchCentreCoord(0) > camSysPtr_->cam_left_ptr_->width_  - (wx-1)/2 - 1||
       patchCentreCoord(1) < (wy-1)/2 ||
       patchCentreCoord(1) > camSysPtr_->cam_left_ptr_->height_ - (wy-1)/2 - 1)
     return false;
+  //patch的四个角不能为不黑？？
   if(mask(patchCentreCoord(1)-(wy-1)/2, patchCentreCoord(0)-(wx-1)/2) < 125)
     return false;
   if(mask(patchCentreCoord(1)-(wy-1)/2, patchCentreCoord(0)+(wx-1)/2) < 125)
@@ -426,9 +440,10 @@ bool RegProblemLM::patchInterpolation(
   // compute SrcPatch_UpLeft coordinate and SrcPatch_DownRight coordinate
   // check patch bourndary is inside img boundary
   Eigen::Vector2i SrcPatch_UpLeft, SrcPatch_DownRight;
+  // location真实坐标，整数后找整数坐标
   SrcPatch_UpLeft << floor(location[0]) - (wx - 1) / 2, floor(location[1]) - (wy - 1) / 2;
   SrcPatch_DownRight << floor(location[0]) + (wx - 1) / 2, floor(location[1]) + (wy - 1) / 2;
-
+  //注意坐标是x对应cols
   if (SrcPatch_UpLeft[0] < 0 || SrcPatch_UpLeft[1] < 0)
   {
     if(debug)
@@ -475,6 +490,7 @@ bool RegProblemLM::patchInterpolation(
     }
     return false;
   }
+  // 1对应rows对应y
   Eigen::MatrixXd SrcPatch = img.block(SrcPatch_UpLeft[1], SrcPatch_UpLeft[0], wy2, wx2);
 
   // Compute R, size (wy+1) * wx.
