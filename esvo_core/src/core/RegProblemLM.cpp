@@ -162,8 +162,10 @@ RegProblemLM::thread(Job& job ) const
 
   // calculate point-wise spatio-temporal residual
   // the residual can be either a scalr or a vector, up to the residualDim.
+  // 老一套，i跳着取
   for(size_t i = i_thread; i < numPoint; i+= NUM_THREAD_)
   {
+    //取出一个ResidualItem，重投影，patchInterpolation，将结果存入residual_，否则255
     ResidualItem & ri = vRI[i];
     ri.residual_ = Eigen::VectorXd(residualDim);
     Eigen::Vector2d x1_s;
@@ -172,6 +174,7 @@ RegProblemLM::thread(Job& job ) const
     else
     {
       Eigen::MatrixXd tau1;
+      
       if(patchInterpolation(TsObs.TS_negative_left_, x1_s, tau1))
       {
         for(size_t y = 0; y < wy; y++)
@@ -432,6 +435,7 @@ bool RegProblemLM::reprojection(
   return true;
 }
 
+//双线性插值的意义
 bool RegProblemLM::patchInterpolation(
   const Eigen::MatrixXd &img,
   const Eigen::Vector2d &location,
@@ -464,13 +468,18 @@ bool RegProblemLM::patchInterpolation(
     return false;
   }
 
-  // compute q1 q2 q3 q4
+  // compute q1 q2 q3 q4 周围四个坐标点？
   Eigen::Vector2d double_indices;
   double_indices << location[1], location[0];
-
+  //double_indices： yd xd
+  //lower_indices： yi   xi
+  //upper_indices： yi+1 xi+1
   std::pair<int, int> lower_indices(floor(double_indices[0]), floor(double_indices[1]));
   std::pair<int, int> upper_indices(lower_indices.first + 1, lower_indices.second + 1);
-
+  //q1：xi + 1  -  xd 右下和中间的x 差值
+  //q2：xd      -  xi 左上和中间的x 差值
+  //q3：yi+1    -  yd 右下和中间的y 差值
+  //q4：yd      -  yi 左上和中间的y 差值
   double q1 = upper_indices.second - double_indices[1];
   double q2 = double_indices[1] - lower_indices.second;
   double q3 = upper_indices.first - double_indices[0];
@@ -494,6 +503,7 @@ bool RegProblemLM::patchInterpolation(
     return false;
   }
   // 1对应rows对应y
+  // 左上取一个
   Eigen::MatrixXd SrcPatch = img.block(SrcPatch_UpLeft[1], SrcPatch_UpLeft[0], wy2, wx2);
 
   // Compute R, size (wy+1) * wx.
