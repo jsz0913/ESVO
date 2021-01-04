@@ -251,7 +251,8 @@ DepthFusion::naive_propagation(
   Eigen::Matrix<double, 4, 4> T_frame_world = df->T_world_frame_.inverse().getTransformationMatrix();
   for (size_t i = 0; i < dp_obs.size(); i++)
   {
-    
+    // world to frame * cam to world
+    // 得到cam to frame
     Eigen::Matrix<double, 4, 4> T_frame_obs = T_frame_world * dp_obs[i].T_world_cam();
     DepthPoint dp_prop;
     if (!propagate_one_point(dp_obs[i], dp_prop, T_frame_obs))
