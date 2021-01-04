@@ -140,6 +140,7 @@ int RegProblemLM::operator()(const Eigen::Matrix<double,6,1>& x, Eigen::VectorXd
       double irls_weight = 1.0;
       if(ri.residual_(0) > rpConfigPtr_->huber_threshold_)
         irls_weight = rpConfigPtr_->huber_threshold_ / ri.residual_(0);
+      
       fvec[i] = sqrt(irls_weight) * ri.residual_(0);
     }
   }
@@ -181,6 +182,7 @@ RegProblemLM::thread(Job& job ) const
           for(size_t x = 0; x < wx; x++)
           {
             size_t index = y * wx + x;
+            //residual_即TSnegative的值
             ri.residual_[index] = tau1(y,x);
           }
       }
