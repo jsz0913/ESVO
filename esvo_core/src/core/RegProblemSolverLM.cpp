@@ -75,6 +75,7 @@ bool RegProblemSolverLM::resetRegProblem(RefFrame* ref, CurFrame* cur)
 
 bool RegProblemSolverLM::solve_numerical()
 {
+  //与DepthProblemSolver中基本相同
   Eigen::LevenbergMarquardt<Eigen::NumericalDiff<RegProblemLM>, double> lm(*numDiff_regProblemPtr_.get());
   lm.resetParameters();
   lm.parameters.ftol = 1e-3;
@@ -87,6 +88,7 @@ bool RegProblemSolverLM::solve_numerical()
   {
     if(iteration >= rpConfigPtr_->MAX_ITERATION_)
       break;
+    //setStochasticSampling(size_t offset, size_t N)
     numDiff_regProblemPtr_->setStochasticSampling(
       (iteration % numDiff_regProblemPtr_->numBatches_) * rpConfigPtr_->BATCH_SIZE_, rpConfigPtr_->BATCH_SIZE_);
     Eigen::VectorXd x(6);
@@ -98,8 +100,9 @@ bool RegProblemSolverLM::solve_numerical()
     }
 
     Eigen::LevenbergMarquardtSpace::Status status = lm.minimizeOneStep(x);
+    //addMotionUpdate(x)这一步的原因
     numDiff_regProblemPtr_->addMotionUpdate(x);
-
+    
     iteration++;
     nfev += lm.nfev;
 
