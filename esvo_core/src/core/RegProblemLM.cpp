@@ -199,21 +199,30 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
     LOG(INFO) << "The Jacobian is not evaluated at Zero !!!!!!!!!!!!!";
     exit(-1);
   }
+  //m_values
   fjac.resize(m_values, 6);
 
   // J_x = dPi_dT * dT_dInvPi * dInvPi_dx
+  // 对x的雅各比 = dpi/dT * dT/dinvPi * dinvPi/dx
+  // 反投影-T转换-投影
   Eigen::Matrix3d dT_dInvPi = R_.transpose();// Explaination for the transpose() can be found below.
   Eigen::Matrix<double,3,2> dInvPi_dx_constPart;
   dInvPi_dx_constPart.setZero();
   dInvPi_dx_constPart(0,0) = 1.0 / camSysPtr_->cam_left_ptr_->P_(0,0);
   dInvPi_dx_constPart(1,1) = 1.0 / camSysPtr_->cam_left_ptr_->P_(1,1);
+  //dInvPi_dx_constPart
+  // 1/P(0,0)     0       
+  //   0      1/P(1,1)   
+  //   0          0
   Eigen::Matrix<double,3,2> J_constPart = dT_dInvPi * dInvPi_dx_constPart;
 
   // J_theta = dPi_dT * dT_dG * dG_dtheta
+  // 对theta的雅各比
   // Assemble the Jacobian without dG_dtheta.
   Eigen::MatrixXd fjacBlock;
   fjacBlock.resize(numPoints_, 12);
   Eigen::MatrixXd fjacTMP(3,6);//FOR Test
+  //
   Eigen::Matrix4d T_left_ref = Eigen::Matrix4d::Identity();
   T_left_ref.block<3,3>(0,0) = R_.transpose();
   T_left_ref.block<3,1>(0,3) = -R_.transpose() * t_;
@@ -234,11 +243,12 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
     else
     {
       // obtain the exact gradient by bilinear interpolation.
+      // 得到投影点对应的梯度 即dI/du？
       Eigen::MatrixXd gx, gy;
       patchInterpolation(pTsObs_->dTS_negative_du_left_, x1_s, gx);
       patchInterpolation(pTsObs_->dTS_negative_dv_left_, x1_s, gy);
       Eigen::Vector2d grad = Eigen::Vector2d(gx(0,0)/8, gy(0,0)/8);//8 is the normalization factor for 3x3 sobel filter.
-
+      // 2*3 P矩阵到底是什么？K？
       Eigen::Matrix<double,2,3> dPi_dT;
       dPi_dT.setZero();
       dPi_dT.block<2,2>(0,0) = camSysPtr_->cam_left_ptr_->P_.block<2,2>(0,0) / ri.p_(2);
@@ -254,10 +264,12 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
       dT_dG.block<3,3>(0,6) = ri.p_(2) * Eigen::Matrix3d::Identity();
       dT_dG.block<3,3>(0,9) = Eigen::Matrix3d::Identity();
 //      LOG(INFO) << "dT_dG:\n" << dT_dG;
+      //(1*2) * (2*3) * (3*2) * (2*3) * (3*12) *（1*1 z）
       fjacBlock.row(i) = grad.transpose() * dPi_dT * J_constPart * dPi_dT * dT_dG * ri.p_(2);//ri.p_(2) refers to 1/rho_i which is actually coming with dInvPi_dx.
     }
   }
   // assemble with dG_dtheta
+  //
   fjac = -fjacBlock * J_G_0_;
   // The explanation for the factor -1 is as follows. The transformation recovered from dThetha
   // is T_right_left (R_, t_). However, the one used for warping is T_left_right (R_.transpose(), -R.transpose() * t).
@@ -285,6 +297,7 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   return 0;
 }
 
+ //求J_G0
 void
 RegProblemLM::computeJ_G(const Eigen::Matrix<double,6,1>&x, Eigen::Matrix<double,12,6>& J_G)
 {
@@ -292,10 +305,13 @@ RegProblemLM::computeJ_G(const Eigen::Matrix<double,6,1>&x, Eigen::Matrix<double
   assert( J_G.rows() == 12 && J_G.cols() == 6 );
   double c1, c2, c3, k;
   double c1_sq, c2_sq, c3_sq, k_sq;
+  
   c1 = x(0);c2 = x(1);c3 = x(2);
   c1_sq = pow(c1,2); c2_sq = pow(c2,2); c3_sq = pow(c3,2);
+  
   k = 1 + pow(c1,2) + pow(c2,2) + pow(c3,2);
   k_sq = pow(k,2);
+  
   Eigen::Matrix3d A1, A2, A3;
   // A1
   A1(0,0) = 2*c1 / k  - 2*c1*(1 + c1_sq - c2_sq - c3_sq) / k_sq;
@@ -330,6 +346,11 @@ RegProblemLM::computeJ_G(const Eigen::Matrix<double,6,1>&x, Eigen::Matrix<double
 
   Eigen::Matrix3d O33 = Eigen::MatrixXd::Zero(3,3);
   Eigen::Matrix3d I33 = Eigen::MatrixXd::Identity(3,3);
+  //J_G
+  //  A1     0(3*3)
+  //  A2     0(3*3)
+  //  A3     0(3*3)
+  // 0(3*3)  1(3*3)
   J_G.block<3,3>(0,0) = A1;  J_G.block<3,3>(0,3) = O33;
   J_G.block<3,3>(3,0) = A2;  J_G.block<3,3>(3,3) = O33;
   J_G.block<3,3>(6,0) = A3;  J_G.block<3,3>(6,3) = O33;
