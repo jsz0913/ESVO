@@ -34,6 +34,7 @@ esvo_Mapping::esvo_Mapping(
     it_(nh),
     calibInfoDir_(tools::param(pnh_, "calibInfoDir", std::string(""))),
     camSysPtr_(new CameraSystem(calibInfoDir_, false)),
+    //都用tools::param的意义是什么
     dpConfigPtr_(new DepthProblemConfig(
       tools::param(pnh_, "patch_size_X", 25),
       tools::param(pnh_, "patch_size_Y", 25),
@@ -50,7 +51,7 @@ esvo_Mapping::esvo_Mapping(
     pc_global_(new PointCloud()),
     depthFramePtr_(new DepthFrame(camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_))
 {
-  // frame id
+  // frame id，where？
   dvs_frame_id_        = tools::param(pnh_, "dvs_frame_id", std::string("dvs"));
   world_frame_id_      = tools::param(pnh_, "world_frame_id", std::string("world"));
   pc_->header.frame_id = world_frame_id_;
@@ -58,6 +59,7 @@ esvo_Mapping::esvo_Mapping(
   pc_global_->header.frame_id = world_frame_id_;
 
   /**** mapping parameters ***/
+  //cfg文件中
   // range and visualization threshold
   invDepth_min_range_   = tools::param(pnh_, "invDepth_min_range", 0.16);
   invDepth_max_range_   = tools::param(pnh_, "invDepth_max_range", 2.0);
@@ -105,9 +107,11 @@ esvo_Mapping::esvo_Mapping(
                                  -1, 0, uniqueness_ratio_);
 
   // calcualte the min,max disparity
+  // ？
   double f = (camSysPtr_->cam_left_ptr_->P_(0,0) + camSysPtr_->cam_left_ptr_->P_(1,1))/2;
   double b = camSysPtr_->baseline_;
   size_t minDisparity = max(size_t(std::floor(f*b*invDepth_min_range_)), (size_t)0);
+  // std::ceil 向上取整数
   size_t maxDisparity = size_t(std::ceil(f*b*invDepth_max_range_));
   minDisparity = max(minDisparity, BM_min_disparity_);
   maxDisparity = min(maxDisparity, BM_max_disparity_);
@@ -129,6 +133,7 @@ esvo_Mapping::esvo_Mapping(
   nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
 
   // callback functions
+  // https://www.cnblogs.com/jiayayao/p/6527713.html
   events_left_sub_  = nh_.subscribe<dvs_msgs::EventArray>("events_left", 0, boost::bind(&esvo_Mapping::eventsCallback, this, _1, boost::ref(events_left_)));
   events_right_sub_ = nh_.subscribe<dvs_msgs::EventArray>("events_right", 0, boost::bind(&esvo_Mapping::eventsCallback, this, _1, boost::ref(events_right_)));
   stampedPose_sub_  = nh_.subscribe("stamped_pose", 0, &esvo_Mapping::stampedPoseCallback, this);
@@ -150,16 +155,21 @@ esvo_Mapping::esvo_Mapping(
   }
 
   // multi-thread management
+  // https://blog.csdn.net/godmaycry/article/details/72844159
   mapping_thread_future_ = mapping_thread_promise_.get_future();
+  // 两对绑定
   reset_future_ = reset_promise_.get_future();
 
   // stereo mapping detached thread
+  // std::move是将对象的状态或者所有权从一个对象转移到另一个对象，只是转移，没有内存的搬迁或者内存拷贝。
   std::thread MappingThread(&esvo_Mapping::MappingLoop, this,
                             std::move(mapping_thread_promise_), std::move(reset_future_));
+  // MappingThread从主线程分离
   MappingThread.detach();
 
   // Dynamic reconfigure
   dynamic_reconfigure_callback_ = boost::bind(&esvo_Mapping::onlineParameterChangeCallback, this, _1, _2);
+  // reset释放之前，指向新的
   server_.reset(new dynamic_reconfigure::Server<DVS_MappingStereoConfig>(nh_private));
   server_->setCallback(dynamic_reconfigure_callback_);
 }
@@ -195,7 +205,7 @@ void esvo_Mapping::MappingLoop(
       LOG(INFO) << "The Mapping node is terminated manually...";
       break;
     }
-    //
+    // TS_history_改变
     if(TS_history_.size() >= 10)/* To assure the esvo_time_surface node has been working. */
     {
       while(true)
@@ -214,7 +224,7 @@ void esvo_Mapping::MappingLoop(
             return;
           }
         }
-      }
+      }//while
       // To check if the most current TS observation has been loaded by dataTransferring()
       if(TS_obs_.second.isEmpty())
       {
@@ -424,6 +434,7 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
   // create a new depth frame
   DepthFrame::Ptr depthFramePtr_new = std::make_shared<DepthFrame>(
     camSysPtr_->cam_left_ptr_->height_, camSysPtr_->cam_left_ptr_->width_);
+  // StampedTimeSurfaceObs std::pair<ros::Time, TimeSurfaceObservation>
   depthFramePtr_new->setId(TS_obs_.second.id_);
   depthFramePtr_new->setTransformation(TS_obs_.second.tr_);
   depthFramePtr_ = depthFramePtr_new;
@@ -432,10 +443,12 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
   cv::Mat dispMap, dispMap8;
   sgbm_->compute(TS_obs_.second.cvImagePtr_left_->image, TS_obs_.second.cvImagePtr_right_->image, dispMap);
   dispMap.convertTo(dispMap8, CV_8U, 255/(num_disparities_*16.));
-
+  // 255/(num_disparities_*16.) 比例因子
   // get the event map (binary mask)
   cv::Mat edgeMap;
   std::vector<std::pair<size_t, size_t> > vEdgeletCoordinates;
+  // std::vector<dvs_msgs::Event *> vEventsPtr_left_SGM_ 
+  // 填充半径为0
   createEdgeMask(vEventsPtr_left_SGM_, camSysPtr_->cam_left_ptr_,
                  edgeMap, vEdgeletCoordinates, true, 0);
 
@@ -443,6 +456,7 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
   std::vector<DepthPoint> vdp_sgm;
   vdp_sgm.reserve(vEdgeletCoordinates.size());
   double var_SGM = pow(stdVar_vis_threshold_*0.99,2);
+  // TS上的事件 利用SGM进行深度点的初始化
   for(size_t i = 0; i < vEdgeletCoordinates.size(); i++)
   {
     size_t x = vEdgeletCoordinates[i].first;
@@ -460,6 +474,7 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
     Eigen::Vector3d p_cam;
     camSysPtr_->cam_left_ptr_->cam2World(p_img, invDepth, p_cam);
     dp.update_p_cam(p_cam);
+    // 高斯分布更新
     dp.update(invDepth, var_SGM);
     dp.residual() = 0.0;
     dp.age() = age_vis_threshold_;
@@ -471,8 +486,11 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
   if(vdp_sgm.size() < INIT_SGM_DP_NUM_Threshold_)
     return false;
   // push the "masked" SGM results to the depthFrame
+  // std::deque<std::vector<DepthPoint> > dqvDepthPoints_;
   dqvDepthPoints_.push_back(vdp_sgm);
+  // 构造函数新产生的depthframe直接fusion
   dFusor_.naive_propagation(vdp_sgm, depthFramePtr_);
+  
   // publish the invDepth map
   std::thread tPublishMappingResult(&esvo_Mapping::publishMappingResults, this,
                                     depthFramePtr_->dMap_, depthFramePtr_->T_world_frame_, t);
@@ -482,7 +500,10 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
 
 bool esvo_Mapping::dataTransferring()
 {
-  TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation());// clean the TS obs.
+  // clean the TS obs. TimeSurfaceObservation有默认构造函数
+  TS_obs_ = std::make_pair(ros::Time(), TimeSurfaceObservation());
+  // using TimeSurfaceHistory = std::map<ros::Time, TimeSurfaceObservation, ROSTimeCmp>
+  // TS_history_在callback
   if(TS_history_.size() <= 10)/* To assure the esvo_time_surface node has been working. */
     return false;
   totalNumCount_ = 0;
@@ -994,10 +1015,12 @@ void esvo_Mapping::createEdgeMask(
   size_t col = camPtr->width_;
   size_t row = camPtr->height_;
   int dilate_radius = (int) radius;
+  // 输出
   edgeMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
   vEdgeletCoordinates.reserve(col*row);
 
   auto it_tmp = vEventsPtr.begin();
+  // 每一个事件中的坐标，遍历其周围的坐标，并设置为255
   while (it_tmp != vEventsPtr.end())
   {
     // undistortion + rectification
