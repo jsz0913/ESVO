@@ -98,12 +98,13 @@ bool RegProblemSolverLM::solve_numerical()
       LOG(ERROR) << "ImproperInputParameters for LM (Tracking)." << std::endl;
       return false;
     }
-
+    //status情况
     Eigen::LevenbergMarquardtSpace::Status status = lm.minimizeOneStep(x);
     //addMotionUpdate(x)这一步的原因
     numDiff_regProblemPtr_->addMotionUpdate(x);
     
     iteration++;
+    //累计lm.nfev
     nfev += lm.nfev;
 
     /*************************** Visualization ************************/
@@ -111,6 +112,7 @@ bool RegProblemSolverLM::solve_numerical()
     {
       size_t width = camSysPtr_->cam_left_ptr_->width_;
       size_t height = camSysPtr_->cam_left_ptr_->height_;
+      // TS_negative_left_
       cv::Mat reprojMap_left = cv::Mat(cv::Size(width, height), CV_8UC1, cv::Scalar(0));
       cv::eigen2cv(numDiff_regProblemPtr_->cur_->pTsObs_->TS_negative_left_, reprojMap_left);
       reprojMap_left.convertTo(reprojMap_left, CV_8UC1);
@@ -128,18 +130,22 @@ bool RegProblemSolverLM::solve_numerical()
         Eigen::Vector2d p_img_left;
         camSysPtr_->cam_left_ptr_->world2Cam(p_3D, p_img_left);
         double z = ri.p_[2];
+    
+        //void Visualization::DrawPoint(double val,double max_range,double min_range,const Eigen::Vector2d &location,
+        // cv::Mat &img )
         visualizor_.DrawPoint(1.0 / z, 1.0 / z_min_, 1.0 / z_max_,
                               Eigen::Vector2d(p_img_left(0), p_img_left(1)), reprojMap_left);
       }
       std_msgs::Header header;
       header.stamp = numDiff_regProblemPtr_->cur_->t_;
+      //toImageMsg
       sensor_msgs::ImagePtr msg = cv_bridge::CvImage(header, "bgr8", reprojMap_left).toImageMsg();
       reprojMap_pub_->publish(msg);
-    }
+    }//if(bVisualize_)
     /*************************** Visualization ************************/
     if(status == 2 || status == 3)
       break;
-  }
+  }//while
 //  LOG(INFO) << "LM Finished ...................";
   numDiff_regProblemPtr_->setPose();
   lmStatics_.nPoints_ = numDiff_regProblemPtr_->numPoints_;
@@ -178,7 +184,7 @@ bool RegProblemSolverLM::solve_analytical()
     if(status == 2 || status == 3)
       break;
   }
-
+  // 除numdiff外，没有区别
   /*************************** Visualization ************************/
   if(bVisualize_) // will slow down the tracker a little bit
   {
