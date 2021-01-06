@@ -303,6 +303,7 @@ void esvo_Mapping::MappingAtTime(const ros::Time& t)
   }
   else
   {
+    // 否则将PROCESS_EVENT_NUM_个vCloseEventsPtr_left_压入vDenoisedEventsPtr_left_
     vDenoisedEventsPtr_left_.clear();
     vDenoisedEventsPtr_left_.reserve(PROCESS_EVENT_NUM_);
     vDenoisedEventsPtr_left_.insert(
@@ -313,11 +314,13 @@ void esvo_Mapping::MappingAtTime(const ros::Time& t)
   // block matching
   tt_mapping.tic();
   ebm_.createMatchProblem(&TS_obs_, &st_map_, &vDenoisedEventsPtr_left_);
+  //std::vector<EventMatchPair> vEMP  block matching
   ebm_.match_all_HyperThread(vEMP);
 #ifdef ESVO_CORE_MAPPING_DEBUG
     LOG(INFO) << "++++ Block Matching (BM) generates " << vEMP.size() << " candidates.";
 #endif
   t_BM = tt_mapping.toc();
+  // 为什么+=
   t_overall_count += t_BM_denoising;
   t_overall_count += t_BM;
 
@@ -333,6 +336,7 @@ void esvo_Mapping::MappingAtTime(const ros::Time& t)
   // nonlinear opitmization
   std::vector<DepthPoint> vdp;
   vdp.reserve(vEMP.size());
+  // block matching得到的匹配对用来深度值优化
   dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
 #ifdef ESVO_CORE_MAPPING_DEBUG
   LOG(INFO) << "Nonlinear optimization returns: " << vdp.size() << " estimates.";
@@ -779,6 +783,7 @@ void esvo_Mapping::timeSurfaceCallback(
   ros::Time t_new_TS = time_surface_left->header.stamp;
   // Made the gradient computation optional which is up to the jacobian choice.
   if(dpSolver_.getProblemType() == NUMERICAL)
+    //// 不初始化transformation的版本
     TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_));
   else
     TS_history_.emplace(t_new_TS, TimeSurfaceObservation(cv_ptr_left, cv_ptr_right, TS_id_, true));
@@ -795,6 +800,7 @@ void esvo_Mapping::timeSurfaceCallback(
 void esvo_Mapping::reset()
 {
   // mutual-thread communication with MappingThread.
+  // reset的reset_promise_ mapping_thread_future_
   LOG(INFO) << "Coming into reset()";
   reset_promise_.set_value();
   LOG(INFO) << "(reset) The mapping thread future is waiting for the value.";
@@ -802,6 +808,7 @@ void esvo_Mapping::reset()
   LOG(INFO) << "(reset) The mapping thread future receives the value.";
 
   // clear all maintained data
+  // 只清空了存储的数据，传入和时间等都没有清空
   events_left_.clear();
   events_right_.clear();
   TS_history_.clear();
@@ -827,16 +834,18 @@ void esvo_Mapping::reset()
   mapping_thread_promise_ = std::promise<void>();
   reset_future_ = reset_promise_.get_future();
   mapping_thread_future_ = mapping_thread_promise_.get_future();
+  //
   ESVO_System_Status_ = "INITIALIZATION";
   nh_.setParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
   std::thread MappingThread(&esvo_Mapping::MappingLoop, this,
                             std::move(mapping_thread_promise_), std::move(reset_future_));
   MappingThread.detach();
 }
-
+// dynamic_reconfigure_callback_ = boost::bind(&esvo_Mapping::onlineParameterChangeCallback, this, _1, _2);
 void esvo_Mapping::onlineParameterChangeCallback(DVS_MappingStereoConfig &config, uint32_t level)
 {
   bool online_parameters_changed = false;
+  // std::lock_guard是一个模板类，模板类型可以是以上的四种锁，用于自动锁定解锁，直到对象作用域结束。
   {
     std::lock_guard<std::mutex> lock(data_mutex_);
 
