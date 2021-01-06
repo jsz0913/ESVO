@@ -497,7 +497,9 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
   tPublishMappingResult.detach();
   return true;
 }
-
+  
+// TS_obs_找
+// 将之前的事件得到
 bool esvo_Mapping::dataTransferring()
 {
   // clean the TS obs. TimeSurfaceObservation有默认构造函数
@@ -510,6 +512,8 @@ bool esvo_Mapping::dataTransferring()
 
   // load current Time-Surface Observation
   auto it_end = TS_history_.rbegin();
+  // 即最新的TS还没有被赋上T值
+  // tracking node传来的时间和dvs_frame_id_对上就行
   it_end++;// in case that the tf is behind the most current TS.
   auto it_begin = TS_history_.begin();
   while(TS_obs_.second.isEmpty())
@@ -527,6 +531,7 @@ bool esvo_Mapping::dataTransferring()
       {
         it_end->second.setTransformation(tr);
         TS_obs_ = *it_end;
+        //TShistory里面也可能为空？
       }
       else
       {
@@ -538,8 +543,9 @@ bool esvo_Mapping::dataTransferring()
     }
     if(it_end->first == it_begin->first)
       break;
+    // it_end只有一个时不动
     it_end++;
-  }
+  }//while，
   if(TS_obs_.second.isEmpty())
     return false;
 
@@ -549,9 +555,13 @@ bool esvo_Mapping::dataTransferring()
   {
     vEventsPtr_left_SGM_.clear();
     ros::Time t_end    = TS_obs_.first;
+    // BM_half_slice_thickness_ 0.001
     ros::Time t_begin(std::max(0.0, t_end.toSec() - 2 * BM_half_slice_thickness_));
+    
     auto ev_end_it     = tools::EventBuffer_lower_bound(events_left_, t_end);
     auto ev_begin_it   = tools::EventBuffer_lower_bound(events_left_, t_begin);
+    // TS_obs_时刻之前的
+    // events_left_ t_begin 到 t_end 的
     const size_t MAX_NUM_Event_INVOLVED = 30000;
     vEventsPtr_left_SGM_.reserve(MAX_NUM_Event_INVOLVED);
     while(ev_end_it != ev_begin_it && vEventsPtr_left_SGM_.size() <= PROCESS_EVENT_NUM_)
@@ -592,6 +602,7 @@ bool esvo_Mapping::dataTransferring()
     // In practice, this is intractable in real-time application.
     // We made a trade off by assuming that events occurred within (0.05 * BM_half_slice_thickness_) ms share an identical pose (virtual view).
     // Here we load transformations for all virtual views.
+    // StampTransformationMap 
     st_map_.clear();
     ros::Time t_tmp = t_begin;
     while(t_tmp.toSec() <= t_end.toSec())
@@ -605,15 +616,17 @@ bool esvo_Mapping::dataTransferring()
         if(ESVO_System_Status_ != "WORKING")
           return false;
       }
+      // (0.05 * BM_half_slice_thickness_) ms share an identical pose 
       t_tmp = ros::Time(t_tmp.toSec() + 0.05 * BM_half_slice_thickness_);
     }
 #ifdef ESVO_CORE_MAPPING_DEBUG
     LOG(INFO) << "Data Transferring (stampTransformation map): " << st_map_.size();
 #endif
-  }
+  }//if(ESVO_System_Status_ == "WORKING")
   return true;
 }
 
+//stampedPose_sub_  = nh_.subscribe("stamped_pose", 0, &esvo_Mapping::stampedPoseCallback, this);
 void esvo_Mapping::stampedPoseCallback(
   const geometry_msgs::PoseStampedConstPtr &ps_msg)
 {
@@ -653,12 +666,14 @@ void esvo_Mapping::stampedPoseCallback(
 }
 
 // return the pose of the left event cam at time t.
+// 利用std::shared_ptr<tf::Transformer> tf_和source_frame找
 bool esvo_Mapping::getPoseAt(
   const ros::Time &t,
   esvo_core::Transformation &Tr,// T_world_virtual
   const std::string& source_frame )
 {
   std::string* err_msg = new std::string();
+  // std::shared_ptr<tf::Transformer> tf_
   if(!tf_->canTransform(world_frame_id_, source_frame, t, err_msg))
   {
 #ifdef ESVO_CORE_MAPPING_LOG
@@ -715,6 +730,7 @@ void esvo_Mapping::eventsCallback(
 void
 esvo_Mapping::clearEventQueue(EventQueue& EQ)
 {
+  // 该类的所有对象在调用这个成员函数时将共享这个变量
   static constexpr size_t MAX_EVENT_QUEUE_LENGTH = 3000000;
   if (EQ.size() > MAX_EVENT_QUEUE_LENGTH)
   {
