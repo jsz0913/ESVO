@@ -641,6 +641,7 @@ void esvo_Mapping::stampedPoseCallback(
 
   if( tf_lastest_common_time_.toSec() != 0)
   {
+    // 时间不一致
     const double dt = stamp_first_event.toSec() - tf_lastest_common_time_.toSec();
     if(dt < 0 || std::fabs(dt) >= max_time_diff_before_reset_s)
     {
@@ -661,7 +662,9 @@ void esvo_Mapping::stampedPoseCallback(
       ps_msg->pose.position.x,
       ps_msg->pose.position.y,
       ps_msg->pose.position.z));
+  
   tf::StampedTransform st(tf, ps_msg->header.stamp, ps_msg->header.frame_id, dvs_frame_id_.c_str());
+  
   tf_->setTransform(st);
 }
 
@@ -717,6 +720,8 @@ void esvo_Mapping::eventsCallback(
   {
     EQ.push_back(e);
     int i = EQ.size() - 2;
+    // i i+1 比较 换位 
+    // i-- 结束，i+1 放入排序好
     while(i >= 0 && EQ[i].ts > e.ts) // we may have to sort the queue, just in case the raw event messages do not come in a chronological order.
     {
       EQ[i+1] = EQ[i];
@@ -738,7 +743,7 @@ esvo_Mapping::clearEventQueue(EventQueue& EQ)
     EQ.erase(EQ.begin(), EQ.begin() + NUM_EVENTS_TO_REMOVE);
   }
 }
-
+// TS_sync_.registerCallback(boost::bind(&esvo_Mapping::timeSurfaceCallback, this, _1, _2));
 void esvo_Mapping::timeSurfaceCallback(
   const sensor_msgs::ImageConstPtr& time_surface_left,
   const sensor_msgs::ImageConstPtr& time_surface_right)
