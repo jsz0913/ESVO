@@ -110,7 +110,7 @@ void Visualization::plot_eventMap(
   cv::Mat & eventMap,
   size_t row, size_t col)
 {
-  //eventMap被赋值前什么样
+  //eventMap被赋值前新创建
   eventMap = cv::Mat(cv::Size(col, row), CV_8UC1, cv::Scalar(0));
   for(size_t i = 0; i < vEventPtr.size(); i++)
     eventMap.at<uchar>(vEventPtr[i]->y, vEventPtr[i]->x) = 255;
