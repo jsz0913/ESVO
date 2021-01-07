@@ -191,25 +191,27 @@ void esvo_Mapping::MappingLoop(
 
   while (ros::ok())
   {
+    
     // reset mapping rate
     if(changed_frame_rate_)
     {
       r = ros::Rate(mapping_rate_hz_);
       changed_frame_rate_ = false;
     }
+    
     // check system status
     nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-    //    LOG(INFO) << "SYSTEM STATUS (MappingLoop): " << ESVO_System_Status_;
     if(ESVO_System_Status_ == "TERMINATE")
     {
       LOG(INFO) << "The Mapping node is terminated manually...";
       break;
     }
-    // TS_history_改变
-    if(TS_history_.size() >= 10)/* To assure the esvo_time_surface node has been working. */
+    /* To assure the esvo_time_surface node has been working. */
+    if(TS_history_.size() >= 10)
     {
       while(true)
       {
+        
         if(data_mutex_.try_lock())
         {
           dataTransferring();
@@ -224,13 +226,17 @@ void esvo_Mapping::MappingLoop(
             return;
           }
         }
-      }//while
+        
+      }
+      //while(true)
+      
       // To check if the most current TS observation has been loaded by dataTransferring()
       if(TS_obs_.second.isEmpty())
       {
         r.sleep();
         continue;
       }
+      
       // Do initialization (State Machine)
       if(ESVO_System_Status_ == "INITIALIZATION" || ESVO_System_Status_ == "RESET")
       {
@@ -249,22 +255,32 @@ void esvo_Mapping::MappingLoop(
         else
           LOG(INFO) << "Initialization fails once.";
       }
+      
       // Do mapping
       if(ESVO_System_Status_ == "WORKING")
         MappingAtTime(TS_obs_.first);
     }
+    //if(TS_history_.size() >= 10)
     else
     {
+      // https://blog.csdn.net/liyazhen2011/article/details/89762874
+      //TS_history_不满足这么多
       if(future_reset.wait_for(std::chrono::nanoseconds(1)) == std::future_status::ready)
       {
         prom_mapping.set_value();
+        //reset（） mapping_thread_future_.get();
         return;
       }
+      
     }
+    
     r.sleep();
-  }
+    
+  }//while(ros::ok())
 }
 
+ // 最新的TSobs上生成一个深度帧，将vCloseEventsPtr_left_ 用来生成一些不同时刻的深度点的向量，
+ // 维持固定数量的TS生成的深度点向量队列，对当前TSobs的深度帧融合
 void esvo_Mapping::MappingAtTime(const ros::Time& t)
 {
   TicToc tt_mapping;
@@ -353,6 +369,8 @@ void esvo_Mapping::MappingAtTime(const ros::Time& t)
   {
     size_t numFusionPoints = 0;
     tt_mapping.tic();
+    // std::deque<std::vector<DepthPoint> > dqvDepthPoints_ 多个不同TSobs
+    // std::vector<DepthPoint> vdp; 对应同一个TSobs
     dqvDepthPoints_.push_back(vdp);
     for(size_t n = 0; n < dqvDepthPoints_.size(); n++)
       numFusionPoints += dqvDepthPoints_[n].size();
@@ -381,6 +399,7 @@ void esvo_Mapping::MappingAtTime(const ros::Time& t)
   numFusionCount = 0;
   for(auto it = dqvDepthPoints_.rbegin(); it != dqvDepthPoints_.rend(); it++)
   {
+    // 循环中对同一个depthFramePtr_不断更新，和论文相对应
     numFusionCount += dFusor_.update(*it, depthFramePtr_, fusion_radius_);
 //    LOG(INFO) << "numFusionCount: " << numFusionCount;
   }
@@ -491,7 +510,9 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
     return false;
   // push the "masked" SGM results to the depthFrame
   // std::deque<std::vector<DepthPoint> > dqvDepthPoints_;
+  
   dqvDepthPoints_.push_back(vdp_sgm);
+  
   // 构造函数新产生的depthframe直接fusion
   dFusor_.naive_propagation(vdp_sgm, depthFramePtr_);
   
@@ -928,6 +949,7 @@ void esvo_Mapping::publishMappingResults(
 
   if(ESVO_System_Status_ == "INITIALIZATION")
     publishPointCloud(depthMapPtr, tr, t);
+  // WORKING 还要判一遍融合条件
   if(ESVO_System_Status_ == "WORKING")
   {
     if(FusionStrategy_ == "CONST_FRAMES")
@@ -961,7 +983,8 @@ void esvo_Mapping::publishPointCloud(
 
   double FarthestDistance = 0.0;
   Eigen::Vector3d FarthestPoint;
-
+  
+  // 近的一部分和最远的一个
   for(auto it = depthMapPtr->begin();it != depthMapPtr->end();it++)
   {
     Eigen::Vector3d p_world = T_world_result.block<3,3>(0,0) * it->p_cam()
