@@ -18,16 +18,19 @@ struct EventMatchPair
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   EventMatchPair() {}
-
+  // 事件本身
   // raw event coordinate
   Eigen::Vector2d x_left_raw_;
-  // rectified_event coordinate (left, right)
-  Eigen::Vector2d x_left_, x_right_;
   // timestamp
   ros::Time t_;
   // pose of virtual view (T_world_virtual)
   Transformation trans_;
-  // inverse depth
+ 
+  
+  
+  // rectified_event coordinate (left, right) TS
+  Eigen::Vector2d x_left_, x_right_;
+  // inverse depth  
   double invDepth_;
   // match cost
   double cost_;
