@@ -500,6 +500,7 @@ bool esvo_Mapping::InitializationAtTime(const ros::Time &t)
     // 高斯分布更新
     dp.update(invDepth, var_SGM);
     dp.residual() = 0.0;
+    //因为第一次需要判断大于age_vis_threshold_
     dp.age() = age_vis_threshold_;
     Eigen::Matrix<double, 4, 4> T_world_cam = TS_obs_.second.tr_.getTransformationMatrix();
     dp.updatePose(T_world_cam);
