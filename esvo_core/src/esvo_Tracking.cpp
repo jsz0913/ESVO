@@ -58,11 +58,14 @@ esvo_Tracking::esvo_Tracking(
   tf_ = std::make_shared<tf::Transformer>(true, ros::Duration(100.0));
   pose_pub_ = nh_.advertise<geometry_msgs::PoseStamped>("/esvo_tracking/pose_pub", 1);
   path_pub_ = nh_.advertise<nav_msgs::Path>("/esvo_tracking/trajectory", 1);
-  map_sub_ = nh_.subscribe("pointcloud", 0, &esvo_Tracking::refMapCallback, this);// local map in the ref view.
-  stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Tracking::stampedPoseCallback, this);// for accessing the pose of the ref view.
+  map_sub_ = nh_.subscribe("pointcloud", 0, &esvo_Tracking::refMapCallback, this);
+    // local map in the ref view.
+  stampedPose_sub_ = nh_.subscribe("stamped_pose", 0, &esvo_Tracking::stampedPoseCallback, this);
+    // for accessing the pose of the ref view.
 
   /*** For Visualization and Test ***/
   reprojMap_pub_left_  = it_.advertise("Reproj_Map_Left", 1);
+  // rpSolver_的成员变量
   rpSolver_.setRegPublisher(&reprojMap_pub_left_);
 
   /*** Tracker ***/
@@ -279,10 +282,13 @@ void esvo_Tracking::reset()
 void esvo_Tracking::refMapCallback(const sensor_msgs::PointCloud2::ConstPtr &msg)
 {
   std::lock_guard<std::mutex> lock(data_mutex_);
+  // msg -> PointCloud2 -> PointCloud::Ptr
+  // 时间为TSobs的t
   pcl::PCLPointCloud2 pcl_pc;
   pcl_conversions::toPCL(*msg, pcl_pc);
   PointCloud::Ptr PC_ptr(new PointCloud());
   pcl::fromPCLPointCloud2(pcl_pc, *PC_ptr);
+  
   refPCMap_.emplace(msg->header.stamp, PC_ptr);
   while(refPCMap_.size() > REF_HISTORY_LENGTH_)
   {
