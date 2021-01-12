@@ -85,19 +85,23 @@ void esvo_Tracking::TrackingLoop()
   while(ros::ok())
   {
     // Keep Idling
+    
     if(refPCMap_.size() < 1 || TS_history_.size() < 1)
     {
       r.sleep();
       continue;
     }
+    
     // Reset
     nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
-    if(ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING)// This is true when the system is reset from dynamic reconfigure
+    // This is true when the system is reset from dynamic reconfigure
+    if(ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING)
     {
       reset();
       r.sleep();
       continue;
     }
+    
     if(ESVO_System_Status_ == "TERMINATE")
     {
       LOG(INFO) << "The tracking node is terminated manually...";
@@ -106,54 +110,48 @@ void esvo_Tracking::TrackingLoop()
 
     // Data Transfer (If mapping node had published refPC.)
     {
+      
       std::lock_guard<std::mutex> lock(data_mutex_);
+     
       if(ref_.t_.toSec() < refPCMap_.rbegin()->first.toSec())// new reference map arrived
         refDataTransferring();
+      
       if(cur_.t_.toSec() < TS_history_.rbegin()->first.toSec())// new observation arrived
       {
+         // 确保TS 比 refPCmap 来的早
         if(ref_.t_.toSec() >= TS_history_.rbegin()->first.toSec())
         {
           LOG(INFO) << "The time_surface observation should be obtained after the reference frame";
           exit(-1);
         }
+        // TS_history may not be updated before the tracking loop excutes the data transfering
         if(!curDataTransferring())
           continue;
       }
       else
         continue;
+      
     }
 
     // create new regProblem
-    TicToc tt;
-    double t_resetRegProblem, t_solve, t_pub_result, t_pub_gt;
-#ifdef  ESVO_CORE_TRACKING_DEBUG
-    tt.tic();
-#endif
     if(rpSolver_.resetRegProblem(&ref_, &cur_))
     {
-#ifdef  ESVO_CORE_TRACKING_DEBUG
-      t_resetRegProblem = tt.toc();
-      tt.tic();
-#endif
+      //求解问题时将两个状态设置为working
       if(ets_ == IDLE)
         ets_ = WORKING;
       if(ESVO_System_Status_ != "WORKING")
         nh_.setParam("/ESVO_SYSTEM_STATUS", "WORKING");
+      
       if(rpType_ == REG_NUMERICAL)
         rpSolver_.solve_numerical();
       if(rpType_ == REG_ANALYTICAL)
         rpSolver_.solve_analytical();
-#ifdef ESVO_CORE_TRACKING_DEBUG
-      t_solve = tt.toc();
-      tt.tic();
-#endif
+      // 求解结果
       T_world_cur_ = cur_.tr_.getTransformationMatrix();
+      
       publishPose(cur_.t_, cur_.tr_);
       if(bVisualizeTrajectory_)
         publishPath(cur_.t_, cur_.tr_);
-#ifdef ESVO_CORE_TRACKING_DEBUG
-      t_pub_result = tt.toc();
-#endif
 
       // save result and gt if available.
       if(bSaveTrajectory_)
@@ -165,34 +163,22 @@ void esvo_Tracking::TrackingLoop()
     }
     else
     {
+      // create new regProblem 失败
       nh_.setParam("/ESVO_SYSTEM_STATUS", "INITIALIZATION");
       ets_ = IDLE;
-//      LOG(INFO) << "Tracking thread is IDLE";
     }
 
-#ifdef  ESVO_CORE_TRACKING_LOG
-    double t_overall_count = 0;
-    t_overall_count = t_resetRegProblem + t_solve + t_pub_result;
-    LOG(INFO) << "\n";
-    LOG(INFO) << "------------------------------------------------------------";
-    LOG(INFO) << "--------------------Tracking Computation Cost---------------";
-    LOG(INFO) << "------------------------------------------------------------";
-    LOG(INFO) << "ResetRegProblem: " << t_resetRegProblem << " ms, (" << t_resetRegProblem / t_overall_count * 100 << "%).";
-    LOG(INFO) << "Registration: " << t_solve << " ms, (" << t_solve / t_overall_count * 100 << "%).";
-    LOG(INFO) << "pub result: " << t_pub_result << " ms, (" << t_pub_result / t_overall_count * 100 << "%).";
-    LOG(INFO) << "Total Computation (" << rpSolver_.lmStatics_.nPoints_ << "): " << t_overall_count << " ms.";
-    LOG(INFO) << "------------------------------------------------------------";
-    LOG(INFO) << "------------------------------------------------------------";
-#endif
     r.sleep();
   }// while
 
   if(bSaveTrajectory_)
   {
+    // 设置目录结构体
     struct stat st;
     if( stat(resultPath_.c_str(), &st) == -1 )// there is no such dir, create one
     {
       LOG(INFO) << "There is no such directory: " << resultPath_;
+      // 迭代的创建目录
       _mkdir(resultPath_.c_str());
       LOG(INFO) << "The directory has been created!!!";
     }
@@ -206,10 +192,14 @@ bool
 esvo_Tracking::refDataTransferring()
 {
   // load reference info
+  // ref_为regproblem中
+  // refPCMap_中时间为发布的点云其对应tsobs的时间
   ref_.t_ = refPCMap_.rbegin()->first;
 
   nh_.getParam("/ESVO_SYSTEM_STATUS", ESVO_System_Status_);
 //  LOG(INFO) << "SYSTEM STATUS(T"
+  // 点云中不再带有tr
+  // 与mapping中datatranfering TSobs生成相同
   if(ESVO_System_Status_ == "INITIALIZATION" && ets_ == IDLE)
     ref_.tr_.setIdentity();
   if(ESVO_System_Status_ == "WORKING" || (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING))
@@ -239,13 +229,17 @@ esvo_Tracking::refDataTransferring()
 bool
 esvo_Tracking::curDataTransferring()
 {
-  // load current observation
+
+  // ev_last_it 上次cur后的第一事件
   auto ev_last_it = EventBuffer_lower_bound(events_left_, cur_.t_);
+  // load current observation
   auto TS_it = TS_history_.rbegin();
 
   // TS_history may not be updated before the tracking loop excutes the data transfering
   if(cur_.t_ == TS_it->first)
     return false;
+  
+  // 更新curFrame
   cur_.t_ = TS_it->first;
   cur_.pTsObs_ = &TS_it->second;
 
@@ -253,8 +247,6 @@ esvo_Tracking::curDataTransferring()
   if(ESVO_System_Status_ == "INITIALIZATION" && ets_ == IDLE)
   {
     cur_.tr_ = ref_.tr_;
-//    LOG(INFO) << "(IDLE) Assign cur's ("<< cur_.t_.toNSec() << ") pose with ref's at " << ref_.t_.toNSec();
-    // LOG(INFO) << " " << cur_.tr_.getTransformationMatrix() << " ";
   }
   if(ESVO_System_Status_ == "WORKING" || (ESVO_System_Status_ == "INITIALIZATION" && ets_ == WORKING))
   {
@@ -427,6 +419,7 @@ void esvo_Tracking::publishPath(const ros::Time& t, Transformation& tr)
   ps_ptr->pose.orientation.z = tr.getRotation().z();
   ps_ptr->pose.orientation.w = tr.getRotation().w();
 
+  //  nav_msgs::Path
   path_.header.stamp = t;
   path_.header.frame_id = world_frame_id_;
   path_.poses.push_back(*ps_ptr);
@@ -445,8 +438,10 @@ esvo_Tracking::saveTrajectory(const std::string &resultDir)
     LOG(INFO) << "File at " << resultDir << " is not opened, save trajectory failed.";
     exit(-1);
   }
+  // 给文件流f设置fixed属性,即禁止使用科学计数法表示浮点数
   f << std::fixed;
-
+  
+  // lPose_ lTimestamp_ 迭代器
   std::list<Eigen::Matrix<double,4,4>,
     Eigen::aligned_allocator<Eigen::Matrix<double,4,4> > >::iterator result_it_begin = lPose_.begin();
   std::list<Eigen::Matrix<double,4,4>,
@@ -460,6 +455,7 @@ esvo_Tracking::saveTrajectory(const std::string &resultDir)
     Rwc_result = (*result_it_begin).block<3,3>(0,0);
     twc_result = (*result_it_begin).block<3,1>(0,3);
     Eigen::Quaterniond q(Rwc_result);
+    
     f << *ts_it_begin << " " << std::setprecision(9) << twc_result.transpose() << " "
       << q.x() << " " << q.y() << " " << q.z() << " " << q.w() << std::endl;
   }
