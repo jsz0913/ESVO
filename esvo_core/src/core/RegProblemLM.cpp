@@ -370,7 +370,7 @@ RegProblemLM::getWarpingTransformation(
   const Eigen::Matrix<double, 6, 1>& x) const
 {
   // 把上一次x结果取出，x是delta值，ref 到 cur
-  // 利用R_ t_ 但不更新
+  // 利用R_ t_ 来算增量后 但不更新 
   // To calcuate R_cur_ref, t_cur_ref
   Eigen::Matrix3d R_cur_ref;
   Eigen::Vector3d t_cur_ref;
