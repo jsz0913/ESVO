@@ -184,7 +184,7 @@ bool RegProblemSolverLM::solve_analytical()
     if(status == 2 || status == 3)
       break;
   }
-  // 除numdiff外，没有区别
+  // 除numdiff外，没有区别（设置的问题内有区别 雅各比部分）
   /*************************** Visualization ************************/
   if(bVisualize_) // will slow down the tracker a little bit
   {
