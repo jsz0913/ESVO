@@ -25,20 +25,23 @@ void RegProblemLM::setProblem(RefFrame* ref, CurFrame* cur, bool bComputeGrad)
 {
   ref_ = ref;
   cur_ = cur;
+  // TS对应depthFrame对应的refFrame 当前TS对应CurFrame
+  // cur_.tr_ = Transformation(T_world_cur_)
   T_world_ref_  = ref_->tr_.getTransformationMatrix();
   T_world_left_ = cur_->tr_.getTransformationMatrix();
   
-  // left到ref ？
+  // left到ref 
   Eigen::Matrix4d T_ref_left = T_world_ref_.inverse() * T_world_left_;
   
+  // 初始值
   R_ = T_ref_left.block<3,3>(0,0);
   t_ = T_ref_left.block<3,1>(0,3);
   
-  ////为什么要分开
+  // ref
   Eigen::Matrix3d R_world_ref = T_world_ref_.block<3,3>(0,0);
   Eigen::Vector3d t_world_ref = T_world_ref_.block<3,1>(0,3);
 
-  // load ref's pointcloud tp vResItem
+  // load ref's pointcloud tp vResItem，把ref中世界坐标系点云转换到ref坐标系，存入ResItems_中
   ResItems_.clear();
   numPoints_ =ref_->vPointXYZPtr_.size();
   if(numPoints_ > rpConfigPtr_->MAX_REGISTRATION_POINTS_)
@@ -50,21 +53,22 @@ void RegProblemLM::setProblem(RefFrame* ref, CurFrame* cur, bool bComputeGrad)
   for(size_t i = 0; i < numPoints_; i++)
   {
     bool bStochasticSampling = true;
+    // 随机交换
     if (bStochasticSampling)
-      // 随机交换
       std::swap(ref->vPointXYZPtr_[i], ref->vPointXYZPtr_[i + rand() % (ref->vPointXYZPtr_.size() - i)]);
     Eigen::Vector3d p_tmp((double) ref->vPointXYZPtr_[i]->x,
                           (double) ref->vPointXYZPtr_[i]->y,
                           (double) ref->vPointXYZPtr_[i]->z);
-    // ref to world
-    // ref到world + world到ref -
-    // ref到world转 世界到ref
+    // world to ref
+    // 同乘转置可以看出
     Eigen::Vector3d p_cam = R_world_ref.transpose() * (p_tmp - t_world_ref);
+    // initialize用于遍历赋值
     ResItems_[i].initialize(p_cam(0), p_cam(1), p_cam(2));//, var);
   }
+  
   // for stochastic sampling
   numBatches_ = std::max(ResItems_.size() / rpConfigPtr_->BATCH_SIZE_, (size_t)1);
-
+  *********************************************************************************************
   // load cur's info
   pTsObs_ = cur->pTsObs_;
   // 高斯blur 后 计算负时间表面存入
@@ -104,6 +108,7 @@ void RegProblemLM::setStochasticSampling(size_t offset, size_t N)
 int RegProblemLM::operator()(const Eigen::Matrix<double,6,1>& x, Eigen::VectorXd& fvec) const
 {
   // calculate the warping transformation (T_cur_ref))
+  // 
   Eigen::Matrix4d T_warping = Eigen::Matrix4d::Identity();
   getWarpingTransformation(T_warping, x);
 
@@ -135,14 +140,15 @@ int RegProblemLM::operator()(const Eigen::Matrix<double,6,1>& x, Eigen::VectorXd
   }
   if(strcmp(rpConfigPtr_->LSnorm_.c_str(), "Huber") == 0)
   {
+    //residual_(0)
     for(size_t i = 0; i < ResItemsStochSampled_.size(); i++)
     {
       ResidualItem & ri = const_cast<ResidualItem&>(ResItemsStochSampled_[i]);
       double irls_weight = 1.0;
       if(ri.residual_(0) > rpConfigPtr_->huber_threshold_)
         irls_weight = rpConfigPtr_->huber_threshold_ / ri.residual_(0);
-      
       fvec[i] = sqrt(irls_weight) * ri.residual_(0);
+      // 
     }
   }
 //  LOG(INFO) << "assign weighted residual ..............";
