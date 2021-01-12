@@ -70,8 +70,9 @@ void RegProblemLM::setProblem(RefFrame* ref, CurFrame* cur, bool bComputeGrad)
   // 高斯blur 后 计算负时间表面存入
   pTsObs_->getTimeSurfaceNegative(rpConfigPtr_->kernelSize_);
   if(bComputeGrad)
-    // 计算负时间表面的sobel 分别存入
+    // 计算负时间表面的sobel 分别存入，rpType_ == REG_ANALYTICAL
     pTsObs_->computeTsNegativeGrad();
+  
   // set fval dimension 函数值维度
   resetNumberValues(numPoints_ * patchSize_);
   if(bPrint_)
