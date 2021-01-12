@@ -29,7 +29,8 @@ void DepthProblem::setProblem(
   Eigen::Matrix<double,4,4> T_left_world = pStampedTsObs_->second.tr_.inverse().getTransformationMatrix();
   Eigen::Matrix<double,4,4> T_left_virtual = T_left_world * T_world_virtual_;
   vT_left_virtual_.push_back(T_left_virtual.block<3,4>(0,0));
-  //父类resetNumberValues
+  
+  //父类的resetNumberValues
   resetNumberValues(dpConfigPtr_->patchSize_X_ * dpConfigPtr_->patchSize_Y_);
 }
 
@@ -185,7 +186,7 @@ bool DepthProblem::warping(
   int wy = dpConfigPtr_->patchSize_Y_;
   int width  = camSysPtr_->cam_left_ptr_->width_;
   int height = camSysPtr_->cam_left_ptr_->height_;
-  //判断两个像平面坐标，除以2？
+  //两个中心点与边缘距离应足够形成patch
   if (x1_s(0) < (wx - 1) / 2 || x1_s(0) > width - (wx - 1) / 2 || x1_s(1) < (wy - 1) / 2 || x1_s(1) > height - (wy - 1) / 2)
     return false;
   if (x2_s(0) < (wx - 1) / 2 || x2_s(0) > width - (wx - 1) / 2 || x2_s(1) < (wy - 1) / 2 || x2_s(1) > height - (wy - 1) / 2)
