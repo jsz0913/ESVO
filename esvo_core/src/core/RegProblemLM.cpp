@@ -130,25 +130,27 @@ int RegProblemLM::operator()(const Eigen::Matrix<double,6,1>& x, Eigen::VectorXd
       thread.join();
 
   // assign the reweighted residual to fvec
+  // fvec  (r.size * patchsize,1)
+  // fjac  (r.size * patchsize , 6)
   if(strcmp(rpConfigPtr_->LSnorm_.c_str(), "l2") == 0)
   {
     for(size_t i = 0; i < ResItemsStochSampled_.size(); i++)
     {
       ResidualItem & ri = const_cast<ResidualItem&>(ResItemsStochSampled_[i]);
+      // segment切片，向量第 i * ri.residual_.size() 开始，ri.residual_.size()个
       fvec.segment(i * ri.residual_.size(), ri.residual_.size()) = ri.residual_;// / sqrt(var);
     }
   }
   if(strcmp(rpConfigPtr_->LSnorm_.c_str(), "Huber") == 0)
   {
-    //residual_(0)
     for(size_t i = 0; i < ResItemsStochSampled_.size(); i++)
     {
       ResidualItem & ri = const_cast<ResidualItem&>(ResItemsStochSampled_[i]);
       double irls_weight = 1.0;
       if(ri.residual_(0) > rpConfigPtr_->huber_threshold_)
         irls_weight = rpConfigPtr_->huber_threshold_ / ri.residual_(0);
+      //这个不也应该这样么？
       fvec[i] = sqrt(irls_weight) * ri.residual_(0);
-      // 
     }
   }
 //  LOG(INFO) << "assign weighted residual ..............";
