@@ -214,8 +214,12 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   // J_x = dPi_dT * dT_dInvPi * dInvPi_dx
   // 对x的雅各比 = dpi/dT * dT/dinvPi * dinvPi/dx
   // 反投影-T转换-投影
+
   Eigen::Matrix3d dT_dInvPi = R_.transpose();// Explaination for the transpose() can be found below.
   Eigen::Matrix<double,3,2> dInvPi_dx_constPart;
+  
+  // ref 上x 反投影到 invPi 转换 T = R_.T*invPi+t_ 投影到 cur 上的pi
+  // x -> invPi   world2Cam   u=(p(0,0)*x+p(0,2)*z)/z v=(p(1,1)*y+p(1,2)*z)/z   
   dInvPi_dx_constPart.setZero();
   dInvPi_dx_constPart(0,0) = 1.0 / camSysPtr_->cam_left_ptr_->P_(0,0);
   dInvPi_dx_constPart(1,1) = 1.0 / camSysPtr_->cam_left_ptr_->P_(1,1);
@@ -223,6 +227,7 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   // 1/P(0,0)     0       
   //   0      1/P(1,1)   
   //   0          0
+  
   Eigen::Matrix<double,3,2> J_constPart = dT_dInvPi * dInvPi_dx_constPart;
 
   // J_theta = dPi_dT * dT_dG * dG_dtheta
@@ -231,7 +236,7 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   Eigen::MatrixXd fjacBlock;
   fjacBlock.resize(numPoints_, 12);
   Eigen::MatrixXd fjacTMP(3,6);//FOR Test
-  //
+ 
   Eigen::Matrix4d T_left_ref = Eigen::Matrix4d::Identity();
   T_left_ref.block<3,3>(0,0) = R_.transpose();
   T_left_ref.block<3,1>(0,3) = -R_.transpose() * t_;
@@ -242,22 +247,26 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   const double P21 = camSysPtr_->cam_left_ptr_->P_(1,0);
   const double P22 = camSysPtr_->cam_left_ptr_->P_(1,1);
   const double P24 = camSysPtr_->cam_left_ptr_->P_(1,3);
-
+  // fjac numPoints 行 见237行
   for(size_t i = 0; i < numPoints_; i++)
   {
     Eigen::Vector2d x1_s;
     const ResidualItem & ri = ResItemsStochSampled_[i];
     if(!reprojection(ri.p_, T_left_ref, x1_s))
+      // 对应fvec设置为255
       fjacBlock.row(i) = Eigen::Matrix<double,1,12>::Zero();
     else
     {
       // obtain the exact gradient by bilinear interpolation.
-      // 得到投影点对应的梯度 即dI/du？
+      // 得到投影点对应的梯度 即dI/du 
       Eigen::MatrixXd gx, gy;
       patchInterpolation(pTsObs_->dTS_negative_du_left_, x1_s, gx);
       patchInterpolation(pTsObs_->dTS_negative_dv_left_, x1_s, gy);
       Eigen::Vector2d grad = Eigen::Vector2d(gx(0,0)/8, gy(0,0)/8);//8 is the normalization factor for 3x3 sobel filter.
-      // 2*3 P矩阵到底是什么？K？
+      // 2*3 像素坐标对相机坐标系
+      // u = 【p（0，0）* x + p（0，1）* y + p（0，2）* z】/z
+      // v = 【p（1，0）* x + p（1，1）* y + p（2，2）* z】/z
+      // 这写法把P整个考虑进去，同时z不为1，反过来求导跟坐标有关
       Eigen::Matrix<double,2,3> dPi_dT;
       dPi_dT.setZero();
       dPi_dT.block<2,2>(0,0) = camSysPtr_->cam_left_ptr_->P_.block<2,2>(0,0) / ri.p_(2);
@@ -272,9 +281,14 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
       dT_dG.block<3,3>(0,3) = ri.p_(1) * Eigen::Matrix3d::Identity();
       dT_dG.block<3,3>(0,6) = ri.p_(2) * Eigen::Matrix3d::Identity();
       dT_dG.block<3,3>(0,9) = Eigen::Matrix3d::Identity();
-//      LOG(INFO) << "dT_dG:\n" << dT_dG;
-      //(1*2) * (2*3) * (3*2) * (2*3) * (3*12) *（1*1 z）
-      fjacBlock.row(i) = grad.transpose() * dPi_dT * J_constPart * dPi_dT * dT_dG * ri.p_(2);//ri.p_(2) refers to 1/rho_i which is actually coming with dInvPi_dx.
+      /* dT_dG
+        diag(x,x,x) diag(y,y,y) diag(z,z,z) diag(1,1,1)
+      */
+      //                      (1*2)       * (2*3)  *     (3*2)   *     (2*3) * (3*12) *（1*1 z）
+      // 最后这个z应该是？
+      fjacBlock.row(i) = grad.transpose() * dPi_dT * J_constPart *     dPi_dT * dT_dG * ri.p_(2);
+      // J_constPart = dT_dInvPi * dInvPi_dx_constPart
+      // ri.p_(2) refers to 1/rho_i which is actually coming with dInvPi_dx.
     }
   }
   // assemble with dG_dtheta
@@ -306,7 +320,9 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   return 0;
 }
 
- //求J_G0
+ // 求J_G0  dG_dx
+ // G 应该是R t 的所有元素
+ // 有点像cayley2rot
 void
 RegProblemLM::computeJ_G(const Eigen::Matrix<double,6,1>&x, Eigen::Matrix<double,12,6>& J_G)
 {
