@@ -401,11 +401,15 @@ RegProblemLM::getWarpingTransformation(
 void
 RegProblemLM::addMotionUpdate(const Eigen::Matrix<double, 6, 1>& dx)
 {
+  /*
+  最开始x设置为0,调用warping得到应用增量后的T，直到收敛才更新R_ t_ ?
+  */
   // To update R_, t_
   Eigen::Vector3d dc = dx.block<3,1>(0,0);
   Eigen::Vector3d dt = dx.block<3,1>(3,0);
   // add rotation
   Eigen::Matrix3d dR = tools::cayley2rot(dc);
+  // dR和R 应该同向 这样warping中刚好转置关系得到 ref 到 cur
   Eigen::Matrix3d newR = dR * R_;
   Eigen::JacobiSVD<Eigen::Matrix3d> svd(newR, Eigen::ComputeFullU | Eigen::ComputeFullV );
   R_ = svd.matrixU() * svd.matrixV().transpose();
