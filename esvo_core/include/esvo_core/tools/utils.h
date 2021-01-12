@@ -44,9 +44,11 @@ using Transformation = kindr::minimal::QuatTransformation;
 // 事件队列
 using EventQueue = std::deque<dvs_msgs::Event>;
 
-// 有序EventQueue 二分查找第一个时间更早的事件
+// 有序EventQueue 二分查找
 // 正常是前三项，第四项定义了规则。lamada[]针对局部变量？
 // static inline 和 inline static
+
+// 查找比给定时间大的事件
 inline static EventQueue::iterator EventBuffer_lower_bound(
   EventQueue& eb, ros::Time& t)
 {
