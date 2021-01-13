@@ -397,8 +397,9 @@ RegProblemLM::getWarpingTransformation(
   Eigen::Vector3d dt = x.block<3,1>(3,0);
   // add rotation
   Eigen::Matrix3d dR = tools::cayley2rot(dc);
-  // R_:cur to ref   R_.T : ref to cur  我觉得dR转置有问题
-  //这句与addupdate左乘右乘相反
+  // R（W（deltaR）） - C（W(R)）
+  // R_:cur to ref   R_.T : ref to cur  这是本来固定的W(R)
+  // dR相当于缩短了距离，需要右乘逆
   Eigen::Matrix3d newR = R_.transpose() * dR.transpose();
   //
   Eigen::JacobiSVD<Eigen::Matrix3d> svd(newR, Eigen::ComputeFullU | Eigen::ComputeFullV );
@@ -427,7 +428,8 @@ RegProblemLM::addMotionUpdate(const Eigen::Matrix<double, 6, 1>& dx)
   Eigen::Vector3d dt = dx.block<3,1>(3,0);
   // add rotation
   Eigen::Matrix3d dR = tools::cayley2rot(dc);
-  // dR和R 应该同向 这样warping中刚好转置关系得到 ref 到 cur
+  // warping中 ref 到 cur
+  // 这里转置为 cur 到 ref 因为R_本身是 cur 到 ref
   Eigen::Matrix3d newR = dR * R_;
   Eigen::JacobiSVD<Eigen::Matrix3d> svd(newR, Eigen::ComputeFullU | Eigen::ComputeFullV );
   R_ = svd.matrixU() * svd.matrixV().transpose();
