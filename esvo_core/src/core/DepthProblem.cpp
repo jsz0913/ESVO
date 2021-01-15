@@ -258,7 +258,12 @@ bool DepthProblem::patchInterpolation(
     return false;
   }
   Eigen::MatrixXd SrcPatch = img.block(SrcPatch_UpLeft[1], SrcPatch_UpLeft[0], wy2, wx2);
-
+  // 加的行和列只用来算而不参与矩阵
+  // f(i+u,j+v) = (1-u)(1-v)f(i,j) + (1-u)vf(i,j+1) + u(1-v)f(i+1,j) + uvf(i+1,j+1)
+  // 以 i=0，j=0为例
+  // R（0，0）= q1 * f（0，0） + q2 * f（0，1）
+  // R（1，0）= q1 * f（1，0） + q2 * f（1，1）
+  // 最终 R（0，0）= q3 *【q1 * f（0，0） + q2 * f（0，1）】+ q4 * 【q1 * f（1，0） + q2 * f（1，1）】
   // Compute R, size (wy+1) * wx.
   Eigen::MatrixXd R;
   R = q1 * SrcPatch.block(0, 0, wy2, wx) + q2 * SrcPatch.block(0, 1, wy2, wx);
