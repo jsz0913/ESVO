@@ -352,7 +352,7 @@ void esvo_Mapping::MappingAtTime(const ros::Time& t)
   // nonlinear opitmization
   std::vector<DepthPoint> vdp;
   vdp.reserve(vEMP.size());
-  // block matching得到的匹配对用来深度值优化
+  // block matching得到的匹配对用来深度值优化，注意匹配对的位置是虚拟位置，得到的深度点是相对虚拟位置
   dpSolver_.solve(&vEMP, &TS_obs_, vdp); // hyper-thread version
 #ifdef ESVO_CORE_MAPPING_DEBUG
   LOG(INFO) << "Nonlinear optimization returns: " << vdp.size() << " estimates.";
