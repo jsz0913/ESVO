@@ -116,6 +116,8 @@ void esvo_Tracking::TrackingLoop()
       if(ref_.t_.toSec() < refPCMap_.rbegin()->first.toSec())// new reference map arrived
         refDataTransferring();
       
+      
+      //  地图可以不来，但TS必须来
       if(cur_.t_.toSec() < TS_history_.rbegin()->first.toSec())// new observation arrived
       {
          // 确保TS 比 refPCmap 来的早
