@@ -100,7 +100,7 @@ bool RegProblemSolverLM::solve_numerical()
     }
     //status情况
     Eigen::LevenbergMarquardtSpace::Status status = lm.minimizeOneStep(x);
-    //addMotionUpdate(x)这一步的原因
+    //addMotionUpdate(x)这一步的原因：一次总的迭代 对变量实际的更新
     numDiff_regProblemPtr_->addMotionUpdate(x);
     
     iteration++;
