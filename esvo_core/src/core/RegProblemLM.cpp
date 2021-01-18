@@ -274,7 +274,7 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
       dPi_dT(0,2) = -(P11 * ri.p_(0) + P12 * ri.p_(1) + P14) / z2;
       dPi_dT(1,2) = -(P21 * ri.p_(0) + P22 * ri.p_(1) + P24) / z2;
 
-      // assemble dT_dG
+      // assemble dT_dG T应该是在参考帧delta后的点
       Eigen::Matrix<double,3,12> dT_dG;
       dT_dG.setZero();
       dT_dG.block<3,3>(0,0) = ri.p_(0) * Eigen::Matrix3d::Identity();
@@ -320,8 +320,8 @@ int RegProblemLM::df(const Eigen::Matrix<double,6,1>& x, Eigen::MatrixXd& fjac) 
   return 0;
 }
 
- // 求J_G0  dG_dx
- // G 应该是R t 的所有元素
+ // 求J_G0：dG_dx，
+ // G 应该是R t 的所有元素 同时这应该是在x=0处求导
  // 有点像cayley2rot
 void
 RegProblemLM::computeJ_G(const Eigen::Matrix<double,6,1>&x, Eigen::Matrix<double,12,6>& J_G)
