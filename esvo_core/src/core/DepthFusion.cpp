@@ -93,6 +93,7 @@ DepthFusion::update(
   return numFusion;
 }
 
+// 转换到当前深度图上，为什么逆深度是不变的
 int
 DepthFusion::fusion(
   DepthPoint &dp_prop,
