@@ -13,6 +13,7 @@ using namespace container;
 using namespace tools;
 namespace core
 {
+// 在virtual view上得到的事件对
 struct EventMatchPair
 {
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
@@ -23,7 +24,7 @@ struct EventMatchPair
   Eigen::Vector2d x_left_raw_;
   // timestamp
   ros::Time t_;
-  // pose of virtual view (T_world_virtual)
+  // pose of virtual view (T_world_virtual) 即事件对的时间对应的tr
   Transformation trans_;
  
   
